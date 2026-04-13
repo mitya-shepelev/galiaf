@@ -7,7 +7,6 @@ import {
 import type { UpdateMembershipRolesRequest } from "@galiaf/types";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
-import type { MembershipRecord } from "../domain/domain.types.js";
 import { DomainStoreService } from "../domain/domain-store.service.js";
 
 @Injectable()

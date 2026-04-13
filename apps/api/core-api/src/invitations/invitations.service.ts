@@ -12,7 +12,6 @@ import {
 } from "@nestjs/common";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
-import type { InvitationRecord } from "../domain/domain.types.js";
 import { DomainStoreService } from "../domain/domain-store.service.js";
 
 @Injectable()
