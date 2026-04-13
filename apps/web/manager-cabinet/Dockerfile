@@ -12,6 +12,7 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @galiaf/sdk build
 RUN pnpm --filter @galiaf/web-manager-cabinet build
 
 FROM node:20-alpine AS runner
