@@ -78,7 +78,7 @@ jobs:
             ${{ steps.image.outputs.image }}:${{ github.event.workflow_run.head_sha }}
             ${{ steps.image.outputs.image }}:latest
 
-  call-deploy-webhook:
+  trigger-dokploy-deploy:
     runs-on: ubuntu-latest
     needs: publish-images
     if: >-
@@ -89,18 +89,48 @@ jobs:
       }}
 
     steps:
-      - name: Trigger deploy webhook
+      - name: Trigger Dokploy deployments
         env:
-          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-          DEPLOY_WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_TOKEN: ${{ secrets.DOKPLOY_TOKEN }}
+          DOKPLOY_APP_ID_PUBLIC_SITE: ${{ vars.DOKPLOY_APP_ID_PUBLIC_SITE }}
+          DOKPLOY_APP_ID_ADMIN_PORTAL: ${{ vars.DOKPLOY_APP_ID_ADMIN_PORTAL }}
+          DOKPLOY_APP_ID_MANAGER_CABINET: ${{ vars.DOKPLOY_APP_ID_MANAGER_CABINET }}
+          DOKPLOY_APP_ID_EMPLOYEE_CABINET: ${{ vars.DOKPLOY_APP_ID_EMPLOYEE_CABINET }}
+          DOKPLOY_APP_ID_CORE_API: ${{ vars.DOKPLOY_APP_ID_CORE_API }}
+          DOKPLOY_APP_ID_CHAT: ${{ vars.DOKPLOY_APP_ID_CHAT }}
         run: |
-          if [ -z "$DEPLOY_WEBHOOK_URL" ]; then
-            echo "DEPLOY_WEBHOOK_URL is not configured, skipping deploy webhook."
-            exit 0
+          if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_TOKEN" ]; then
+            echo "DOKPLOY_URL or DOKPLOY_TOKEN is not configured."
+            exit 1
           fi
 
-          curl --fail --show-error --silent \
-            -X POST "$DEPLOY_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Deploy-Token: $DEPLOY_WEBHOOK_TOKEN" \
-            -d "{\"sha\":\"${{ github.event.workflow_run.head_sha }}\",\"imageTag\":\"${{ github.event.workflow_run.head_sha }}\",\"ref\":\"${{ github.event.workflow_run.head_branch }}\",\"repository\":\"${{ github.repository }}\"}"
+          deploy_endpoint="${DOKPLOY_URL%/}/application.deploy"
+
+          deploy_app() {
+            service_name="$1"
+            application_id="$2"
+
+            if [ -z "$application_id" ]; then
+              echo "Missing Dokploy application id for ${service_name}."
+              exit 1
+            fi
+
+            echo "Triggering Dokploy deployment for ${service_name}"
+
+            curl --fail --show-error --silent \
+              -X POST "$deploy_endpoint" \
+              -H "accept: application/json" \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: $DOKPLOY_TOKEN" \
+              -d "{\"applicationId\":\"${application_id}\"}"
+
+            echo
+          }
+
+          deploy_app "public-site" "$DOKPLOY_APP_ID_PUBLIC_SITE"
+          deploy_app "admin-portal" "$DOKPLOY_APP_ID_ADMIN_PORTAL"
+          deploy_app "manager-cabinet" "$DOKPLOY_APP_ID_MANAGER_CABINET"
+          deploy_app "employee-cabinet" "$DOKPLOY_APP_ID_EMPLOYEE_CABINET"
+          deploy_app "core-api" "$DOKPLOY_APP_ID_CORE_API"
+          deploy_app "chat" "$DOKPLOY_APP_ID_CHAT"

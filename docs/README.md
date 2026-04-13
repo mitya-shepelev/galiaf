@@ -23,6 +23,7 @@
 - observability baseline для metrics и structured logs.
 - centralized log sink baseline через `Vector + Loki`.
 - audit trail baseline для access-sensitive и security-sensitive событий в `core-api`.
+- Dokploy API deploy contract для production delivery path.
 - server-side skeleton для webhook deploy в `infra/deploy/`.
 - staging/production deployment checklist и `systemd` unit для webhook consumer.
 - пример `nginx` reverse proxy для deploy webhook.

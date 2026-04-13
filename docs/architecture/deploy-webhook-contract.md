@@ -1,14 +1,14 @@
-# Deploy Webhook Contract
+# Self-Managed Deploy Webhook Contract
 
 ## Назначение
 
-Этот контракт описывает payload, который GitHub Actions отправляет на серверный deploy webhook после успешной публикации Docker images.
+Этот контракт описывает payload для self-managed deploy webhook consumer из `infra/deploy/`.
+
+Для production окружения на Dokploy primary path теперь описан отдельно в `docs/architecture/dokploy-deploy-contract.md`.
 
 ## Когда вызывается webhook
 
-- только после успешного `CI` на ветке `main`;
-- только после успешной публикации image в GHCR;
-- webhook не вызывается для pull request и неуспешных workflow.
+Этот контракт актуален для self-hosted fallback path, когда используется собственный deploy webhook consumer, а не Dokploy API.
 
 ## HTTP запрос
 

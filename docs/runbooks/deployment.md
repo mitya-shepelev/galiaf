@@ -6,11 +6,12 @@
 2. GitHub Actions выполняет проверки.
 3. После merge в основную ветку собираются Docker images.
 4. Образы публикуются в registry.
-5. После успешного `CI` workflow публикации вызывает deploy webhook на сервере.
-6. Сервер выполняет `docker compose pull` и `docker compose up -d` с `IMAGE_TAG=<sha>`.
-7. Выполняются health checks.
+5. После успешного `CI` workflow публикации вызывает Dokploy API deploy для production applications.
+6. Dokploy выполняет redeploy приложений на опубликованных image.
+7. Выполняются health checks и platform-level deployment checks.
 
 Webhook payload описан отдельно в `docs/architecture/deploy-webhook-contract.md`.
+Dokploy production deploy contract описан отдельно в `docs/architecture/dokploy-deploy-contract.md`.
 Health probes описаны отдельно в `docs/architecture/health-contract.md`.
 Metrics и log sources описаны отдельно в `docs/architecture/observability.md`.
 Отдельный runbook для centralized logs описан в `docs/runbooks/observability.md`.
@@ -54,9 +55,33 @@ Metrics и log sources описаны отдельно в `docs/architecture/obs
 - `AUTH_JWKS_URI`
 - `AUTH_ALLOWED_CORS_ORIGINS`
 
-## Минимальный server-side deploy stack
+## Dokploy production path
 
-На сервере можно использовать следующий skeleton из репозитория:
+Для production окружения в Dokploy GitHub Actions использует:
+
+- `DOKPLOY_URL`
+- `DOKPLOY_TOKEN`
+- `DOKPLOY_APP_ID_*` для 6 приложений
+
+Текущий workflow вызывает:
+
+```text
+POST <DOKPLOY_URL>/application.deploy
+```
+
+с payload:
+
+```json
+{
+  "applicationId": "..."
+}
+```
+
+Это primary production path для Dokploy.
+
+## Self-managed fallback deploy stack
+
+Если нужен self-managed fallback path вне Dokploy, можно использовать следующий skeleton из репозитория:
 
 - `infra/deploy/webhook-server.mjs`
 - `infra/deploy/deploy-release.sh`
@@ -137,7 +162,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## Порядок выполнения deploy по webhook
+## Порядок выполнения self-managed deploy по webhook
 
 1. GitHub Actions отправляет `POST /deploy`.
 2. `webhook-server.mjs` валидирует `X-Deploy-Token`, `repository`, `ref`, `sha`, `imageTag`.

@@ -128,6 +128,7 @@
   - добавлен server-side skeleton для deploy webhook consumer, release script и health checks в `infra/deploy/`.
   - добавлены staging checklist, incident capture steps и пример `systemd` unit для webhook consumer.
   - добавлен пример `nginx` reverse proxy для внешней публикации deploy webhook endpoint.
+  - production delivery path для Dokploy переведен на `application.deploy` через Dokploy API и GitHub repository secrets/variables.
 - Критерий выхода:
   - после merge/push артефакты собираются автоматически;
   - сервер обновляется по webhook без ручного SSH как основного пути.
