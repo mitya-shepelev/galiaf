@@ -86,6 +86,15 @@ XDG_CACHE_HOME=/tmp/corepack-cache COREPACK_HOME=/tmp/corepack-home corepack pnp
 XDG_CACHE_HOME=/tmp/corepack-cache COREPACK_HOME=/tmp/corepack-home corepack pnpm --filter @galiaf/web-employee-cabinet dev
 ```
 
+Для web smoke test по трем кабинетам:
+
+```bash
+cd /Applications/ServBay/www/galiaf
+node scripts/web-cabinets-smoke-test.mjs
+```
+
+Скрипт ожидает, что `core-api`, `admin-portal`, `manager-cabinet` и `employee-cabinet` уже подняты локально, проверяет `health` у backend и затем валидирует живые HTML-страницы по role-specific маркерам.
+
 ### Mobile
 
 ```bash

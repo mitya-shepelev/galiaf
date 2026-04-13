@@ -9,6 +9,7 @@
     "build": "turbo run build",
     "chat:smoke": "node scripts/chat-smoke-test.mjs",
     "core-api:manager:smoke": "node scripts/core-api-manager-smoke-test.mjs",
+    "web:smoke": "node scripts/web-cabinets-smoke-test.mjs",
     "dev": "turbo run dev --parallel",
     "lint": "biome lint .",
     "format": "biome format --write .",

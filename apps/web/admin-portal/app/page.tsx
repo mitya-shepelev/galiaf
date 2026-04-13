@@ -1,4 +1,14 @@
-import { ApiClient, createDevAuthHeaders, demoAuthContexts } from "@galiaf/sdk";
+import { revalidatePath } from "next/cache";
+import {
+  ApiClient,
+  createDevAuthHeaders,
+  demoAuthContexts,
+  type MembershipRecord,
+} from "@galiaf/sdk";
+import {
+  AdminActionsPanel,
+  type AdminActionState,
+} from "./admin-actions-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -23,15 +33,75 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+function normalizeOrganizationStatus(
+  value: FormDataEntryValue | null,
+): "active" | "suspended" {
+  return value === "suspended" ? "suspended" : "active";
+}
+
+function countActiveMemberships(
+  memberships: MembershipRecord[],
+  organizationId: string,
+): number {
+  return memberships.filter(
+    (membership) =>
+      membership.organizationId === organizationId && membership.status === "active",
+  ).length;
+}
+
+async function createOrganizationAction(
+  _previousState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  "use server";
+
+  const name = String(formData.get("name") ?? "").trim();
+  const status = normalizeOrganizationStatus(formData.get("status"));
+
+  if (!name) {
+    return {
+      status: "error",
+      message: "Название организации обязательно.",
+    };
+  }
+
+  try {
+    const api = createApiClient();
+
+    await api.createOrganization({
+      name,
+      status,
+    });
+
+    revalidatePath("/");
+
+    return {
+      status: "success",
+      message: `Организация "${name}" создана.`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Не удалось создать организацию.",
+    };
+  }
+}
+
 export default async function AdminPortalPage() {
   const api = createApiClient();
-  const [health, session, bootstrap, organizations, users] = await Promise.all([
-    api.getHealth(),
-    api.getSession(),
-    api.getAdminBootstrap(),
-    api.listOrganizations(),
-    api.listUsers(),
-  ]);
+  const [health, session, bootstrap, organizations, users, memberships, adminProfile] =
+    await Promise.all([
+      api.getHealth(),
+      api.getSession(),
+      api.getAdminBootstrap(),
+      api.listOrganizations(),
+      api.listUsers(),
+      api.listMemberships(),
+      api.getCurrentUser(),
+    ]);
+  const activeMemberships = memberships.filter(
+    (membership) => membership.status === "active",
+  );
 
   return (
     <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "72px 24px" }}>
@@ -52,8 +122,8 @@ export default async function AdminPortalPage() {
         {[
           `Организаций: ${organizations.length}`,
           `Пользователей: ${users.length}`,
-          `Redis: ${health.redis}`,
-          `PostgreSQL: ${health.database}`,
+          `Активных membership: ${activeMemberships.length}`,
+          `Redis: ${health.redis} · PostgreSQL: ${health.database}`,
         ].map((item) => (
           <article
             key={item}
@@ -68,9 +138,10 @@ export default async function AdminPortalPage() {
           </article>
         ))}
       </section>
+      <AdminActionsPanel createOrganizationAction={createOrganizationAction} />
       <section
         style={{
-          marginTop: "32px",
+          marginTop: "16px",
           display: "grid",
           gridTemplateColumns: "1.1fr 0.9fr",
           gap: "16px",
@@ -119,6 +190,12 @@ export default async function AdminPortalPage() {
           <p style={{ marginTop: 0, color: "var(--muted)" }}>
             Роли: {session.effectiveRoles.join(", ")}
           </p>
+          <p style={{ margin: "18px 0 8px" }}>
+            Профиль: {adminProfile.user.fullName}
+          </p>
+          <p style={{ marginTop: 0, color: "var(--muted)" }}>
+            {adminProfile.user.email}
+          </p>
           <p style={{ marginTop: "18px", marginBottom: "8px" }}>
             Разрешенные зоны: {bootstrap.allowedAreas.join(", ")}
           </p>
@@ -130,40 +207,90 @@ export default async function AdminPortalPage() {
       <section
         style={{
           marginTop: "16px",
-          background: "var(--panel)",
-          border: "1px solid var(--line)",
-          borderRadius: "24px",
-          padding: "24px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "16px",
         }}
       >
-        <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
-        <div style={{ display: "grid", gap: "12px" }}>
-          {organizations.map((organization) => (
-            <article
-              key={organization.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                paddingBottom: "12px",
-                borderBottom: "1px solid var(--line)",
-              }}
-            >
-              <div>
-                <strong>{organization.name}</strong>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {organization.id}
-                </p>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <strong>{organization.status}</strong>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {formatDate(organization.createdAt)}
-                </p>
-              </div>
-            </article>
-          ))}
-        </div>
+        <article
+          style={{
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
+            borderRadius: "24px",
+            padding: "24px",
+          }}
+        >
+          <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {organizations.map((organization) => (
+              <article
+                key={organization.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  paddingBottom: "12px",
+                  borderBottom: "1px solid var(--line)",
+                }}
+              >
+                <div>
+                  <strong>{organization.name}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {organization.id}
+                  </p>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    Активных назначений: {countActiveMemberships(memberships, organization.id)}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <strong>{organization.status}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {formatDate(organization.createdAt)}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+        <article
+          style={{
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
+            borderRadius: "24px",
+            padding: "24px",
+          }}
+        >
+          <p style={{ color: "var(--muted)", marginTop: 0 }}>
+            Пользователи платформы
+          </p>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {users.map((user) => {
+              const userMemberships = activeMemberships.filter(
+                (membership) => membership.userId === user.id,
+              );
+
+              return (
+                <article
+                  key={user.id}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "16px",
+                    padding: "14px",
+                  }}
+                >
+                  <strong>{user.fullName}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>{user.email}</p>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    Активных membership: {userMemberships.length}
+                  </p>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    Статус: {user.status}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </article>
       </section>
     </main>
   );

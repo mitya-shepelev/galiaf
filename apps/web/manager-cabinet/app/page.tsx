@@ -1,5 +1,15 @@
-import { ApiClient, createDevAuthHeaders, demoAuthContexts } from "@galiaf/sdk";
+import { revalidatePath } from "next/cache";
+import {
+  ApiClient,
+  createDevAuthHeaders,
+  demoAuthContexts,
+  type MembershipRecord,
+} from "@galiaf/sdk";
 import { LiveChatPanel } from "./live-chat-panel";
+import {
+  ManagerActionsPanel,
+  type ManagerActionState,
+} from "./manager-actions-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -16,18 +26,131 @@ function createApiClient() {
   });
 }
 
+function resolveOrganizationId(workspace: {
+  activeTenantId?: string;
+  availableMemberships: Array<{ organizationId: string }>;
+}): string {
+  return (
+    workspace.activeTenantId ??
+    workspace.availableMemberships[0]?.organizationId ??
+    "org_alpha"
+  );
+}
+
+function normalizeRole(value: FormDataEntryValue | null): "employee" | "company_manager" {
+  return value === "company_manager" ? "company_manager" : "employee";
+}
+
+async function createInvitationAction(
+  _previousState: ManagerActionState,
+  formData: FormData,
+): Promise<ManagerActionState> {
+  "use server";
+
+  const organizationId = String(formData.get("organizationId") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const targetName = String(formData.get("targetName") ?? "").trim();
+  const role = normalizeRole(formData.get("role"));
+
+  if (!organizationId || !email) {
+    return {
+      status: "error",
+      message: "Нужны organizationId и email для приглашения.",
+    };
+  }
+
+  try {
+    const api = createApiClient();
+
+    await api.createInvitation({
+      organizationId,
+      email,
+      targetName: targetName.length > 0 ? targetName : undefined,
+      roles: [role],
+    });
+
+    revalidatePath("/");
+
+    return {
+      status: "success",
+      message: `Приглашение для ${email} создано.`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Не удалось создать приглашение.",
+    };
+  }
+}
+
+async function createEmployeeAction(
+  _previousState: ManagerActionState,
+  formData: FormData,
+): Promise<ManagerActionState> {
+  "use server";
+
+  const organizationId = String(formData.get("organizationId") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const role = normalizeRole(formData.get("role"));
+
+  if (!organizationId || !email || !fullName) {
+    return {
+      status: "error",
+      message: "Нужны organizationId, email и полное имя сотрудника.",
+    };
+  }
+
+  try {
+    const api = createApiClient();
+
+    await api.createOrganizationEmployee(organizationId, {
+      email,
+      fullName,
+      roles: [role],
+    });
+
+    revalidatePath("/");
+
+    return {
+      status: "success",
+      message: `Сотрудник ${fullName} добавлен в ${organizationId}.`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Не удалось создать сотрудника.",
+    };
+  }
+}
+
+function membershipBadge(membership?: MembershipRecord) {
+  if (!membership) {
+    return "Без membership в активной организации";
+  }
+
+  return `${membership.roles.join(", ")} · ${membership.status}`;
+}
+
 export default async function ManagerCabinetPage() {
   const api = createApiClient();
   const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
-  const [session, workspace, organizations, users, memberships, invitations] =
-    await Promise.all([
-      api.getSession(),
-      api.getWorkspace(),
-      api.listOrganizations(),
-      api.listUsers(),
-      api.listMemberships("org_alpha"),
-      api.listInvitations("org_alpha"),
-    ]);
+  const [session, workspace, organizations, users, managerProfile] = await Promise.all([
+    api.getSession(),
+    api.getWorkspace(),
+    api.listOrganizations(),
+    api.listUsers(),
+    api.getCurrentUser(),
+  ]);
+  const currentOrganizationId = resolveOrganizationId(workspace);
+  const [memberships, invitations] = await Promise.all([
+    api.listMemberships(currentOrganizationId),
+    api.listInvitations(currentOrganizationId),
+  ]);
+  const membershipByUserId = new Map(
+    memberships.map((membership) => [membership.userId, membership]),
+  );
+  const scopedUsers = users.filter((user) => membershipByUserId.has(user.id));
 
   return (
     <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "72px 24px" }}>
@@ -35,7 +158,7 @@ export default async function ManagerCabinetPage() {
         Company Manager
       </p>
       <h1 style={{ fontSize: "clamp(2.3rem, 6vw, 4.2rem)", margin: 0 }}>
-        Кабинет руководителя с tenant-изоляцией.
+        Кабинет руководителя с live tenant-операциями.
       </h1>
       <section
         style={{
@@ -69,8 +192,8 @@ export default async function ManagerCabinetPage() {
         }}
       >
         {[
-          `Активная организация: ${workspace.activeTenantId ?? "не выбрана"}`,
-          `Пользователей в контуре: ${users.length}`,
+          `Активная организация: ${currentOrganizationId}`,
+          `Пользователей в контуре: ${scopedUsers.length}`,
           `Участников: ${memberships.length}`,
           `Инвайтов: ${invitations.length}`,
         ].map((item) => (
@@ -87,6 +210,11 @@ export default async function ManagerCabinetPage() {
           </article>
         ))}
       </section>
+      <ManagerActionsPanel
+        createEmployeeAction={createEmployeeAction}
+        createInvitationAction={createInvitationAction}
+        organizationId={currentOrganizationId}
+      />
       <section
         style={{
           marginTop: "16px",
@@ -122,6 +250,23 @@ export default async function ManagerCabinetPage() {
                 }}
               >
                 {membership.organizationId}: {membership.roles.join(", ")}
+              </div>
+            ))}
+          </div>
+          <p style={{ marginTop: "18px", marginBottom: "8px" }}>
+            DB-backed профиль менеджера
+          </p>
+          <div style={{ display: "grid", gap: "8px" }}>
+            {managerProfile.resolvedOrganizations.map((organization) => (
+              <div
+                key={organization.id}
+                style={{
+                  border: "1px solid var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                }}
+              >
+                {organization.name} · {organization.id}
               </div>
             ))}
           </div>
@@ -170,9 +315,21 @@ export default async function ManagerCabinetPage() {
             padding: "22px",
           }}
         >
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>Команда</p>
+          <p style={{ color: "var(--muted)", marginTop: 0 }}>Команда организации</p>
           <div style={{ display: "grid", gap: "10px" }}>
-            {users.map((user) => (
+            {scopedUsers.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                В активной организации пока нет сотрудников.
+              </div>
+            ) : null}
+            {scopedUsers.map((user) => (
               <div
                 key={user.id}
                 style={{
@@ -184,6 +341,9 @@ export default async function ManagerCabinetPage() {
                 <strong>{user.fullName}</strong>
                 <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
                   {user.email}
+                </p>
+                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                  {membershipBadge(membershipByUserId.get(user.id))}
                 </p>
               </div>
             ))}
@@ -201,6 +361,18 @@ export default async function ManagerCabinetPage() {
             Ожидающие приглашения
           </p>
           <div style={{ display: "grid", gap: "10px" }}>
+            {invitations.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                Для активной организации нет ожидающих приглашений.
+              </div>
+            ) : null}
             {invitations.map((invitation) => (
               <div
                 key={invitation.id}
@@ -213,6 +385,9 @@ export default async function ManagerCabinetPage() {
                 <strong>{invitation.email}</strong>
                 <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
                   {invitation.roles.join(", ")} · {invitation.status}
+                </p>
+                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                  Истекает: {new Date(invitation.expiresAt).toLocaleString("ru-RU")}
                 </p>
               </div>
             ))}
@@ -229,7 +404,7 @@ export default async function ManagerCabinetPage() {
           effectiveRoles: ["company_manager"],
           rawClaims: {},
         }}
-        roomId={`org:${workspace.activeTenantId ?? "org_alpha"}`}
+        roomId={`org:${currentOrganizationId}`}
         subtitle="Минимальный live chat client для smoke-проверки manager/employee потока."
         title="Live Chat"
       />

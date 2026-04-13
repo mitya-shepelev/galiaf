@@ -64,14 +64,20 @@
 
 ### Phase 2. Web Cabinets To Live State
 
-- Статус: `planned`
+- Статус: `in_progress`
 - Цель: перевести web-приложения из каркаса в рабочие кабинеты.
 - Основные задачи:
   - подключить admin portal к live organization/user management;
-  - подключить manager cabinet к invitations, memberships, employee roster;
+  - завершить manager cabinet вокруг live `invitations`, `memberships` и `employee roster`;
   - подключить employee cabinet к персональным данным и рабочему пространству;
   - оформить ошибки доступа, empty states и loading states;
   - добавить smoke tests на ключевые web flows.
+- Текущий прогресс:
+  - `admin-portal` уже использует live `organizations`, `users`, `memberships`, `admin/bootstrap` и позволяет создавать организации через live action;
+  - `manager-cabinet` уже использует live `core-api` для просмотра активной организации, roster, memberships и pending invitations;
+  - в `manager-cabinet` уже подключены live actions для создания invitation и прямого provisioning сотрудника.
+  - `employee-cabinet` переведен на live `users/me` и `workspace`, чтобы кабинет опирался только на разрешенные employee-scoped данные.
+  - добавлен минимальный `web-cabinets` smoke test для live-проверки `admin`, `manager` и `employee` кабинетов.
 - Критерий выхода:
   - каждая роль может пройти свой базовый путь через web UI без ручных заглушек.
 
@@ -136,9 +142,9 @@
 
 Логичнее всего двигаться так:
 
-1. Дожать `core-api` доменные сценарии для `manager -> employee/invitation/membership`.
-2. Подключить manager и employee cabinets к live flow без заглушек.
-3. После этого собрать базовый GitHub Actions + Docker delivery path, чтобы изменения можно было стабильно гонять через CI.
+1. Оформить empty/error/loading states там, где кабинеты еще выглядят как технические экраны, а не продуктовые flows.
+2. После этого собрать базовый GitHub Actions + Docker delivery path, чтобы изменения можно было стабильно гонять через CI.
+3. Затем уже подключать эти smoke checks в GitHub Actions как часть delivery pipeline.
 
 ## Что считаем успехом в ближайшие итерации
 
