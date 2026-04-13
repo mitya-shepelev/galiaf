@@ -111,6 +111,7 @@ jobs:
 
       - name: Build smoke targets
         run: |
+          pnpm --filter @galiaf/sdk build
           pnpm --filter @galiaf/core-api build
           pnpm --filter @galiaf/chat-service build
           pnpm --filter @galiaf/web-admin-portal build
