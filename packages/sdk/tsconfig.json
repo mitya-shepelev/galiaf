@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig/library.json",
+  "compilerOptions": {
+    "lib": ["DOM", "ES2023"],
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

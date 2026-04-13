@@ -1,0 +1,19 @@
+{
+  "name": "@galiaf/web-public-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "node -e \"console.log('No tests for public-site yet')\"",
+    "clean": "rm -rf .next"
+  },
+  "dependencies": {
+    "@galiaf/sdk": "workspace:*",
+    "next": "15.5.3",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  }
+}

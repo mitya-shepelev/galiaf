@@ -1,0 +1,31 @@
+{
+  "name": "@galiaf/chat-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node -e \"console.log('No tests for chat-service yet')\"",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@galiaf/types": "workspace:*",
+    "@nestjs/common": "11.1.6",
+    "@nestjs/core": "11.1.6",
+    "@nestjs/platform-fastify": "11.1.6",
+    "@nestjs/platform-socket.io": "11.1.6",
+    "@nestjs/websockets": "11.1.6",
+    "dotenv": "16.6.1",
+    "jose": "6.1.0",
+    "pg": "8.16.3",
+    "redis": "5.8.2",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "socket.io": "4.8.1"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.5"
+  }
+}

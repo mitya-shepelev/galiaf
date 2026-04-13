@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Galiaf",
+    "slug": "galiaf",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.galiaf.app"
+    },
+    "android": {
+      "package": "com.galiaf.app"
+    },
+    "extra": {
+      "apiPresets": {
+        "iosSimulator": "http://127.0.0.1:4000/api/v1",
+        "androidEmulator": "http://10.0.2.2:4000/api/v1"
+      },
+      "defaultApiBaseUrl": "http://127.0.0.1:4000/api/v1",
+      "eas": {
+        "projectId": "replace-with-real-eas-project-id"
+      }
+    }
+  }
+}

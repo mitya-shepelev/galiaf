@@ -1,0 +1,26 @@
+import { Module } from "@nestjs/common";
+import { AuthConfigService } from "./auth/auth-config.service.js";
+import { IdentityResolverService } from "./auth/identity-resolver.service.js";
+import { ChatGateway } from "./gateway/chat.gateway.js";
+import { HealthController } from "./health/health.controller.js";
+import { ChatAuthController } from "./auth/chat-auth.controller.js";
+import { ChatMessageStoreService } from "./messages/chat-message-store.service.js";
+import { ChatDatabaseService } from "./platform/chat-database.service.js";
+import { ChatRedisService } from "./platform/chat-redis.service.js";
+import { ChatRealtimeService } from "./realtime/chat-realtime.service.js";
+import { ChatStateService } from "./state/chat-state.service.js";
+
+@Module({
+  controllers: [HealthController, ChatAuthController],
+  providers: [
+    AuthConfigService,
+    IdentityResolverService,
+    ChatDatabaseService,
+    ChatRedisService,
+    ChatRealtimeService,
+    ChatMessageStoreService,
+    ChatStateService,
+    ChatGateway,
+  ],
+})
+export class AppModule {}

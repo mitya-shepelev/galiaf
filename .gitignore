@@ -1,0 +1,12 @@
+node_modules
+.turbo
+.next
+dist
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage
+pnpm-lock.yaml
+apps/mobile/app/.expo
+apps/mobile/app/dist

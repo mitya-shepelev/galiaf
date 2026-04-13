@@ -1,0 +1,20 @@
+{
+  "name": "@galiaf/web-manager-cabinet",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "typecheck": "tsc --noEmit",
+    "test": "node -e \"console.log('No tests for manager-cabinet yet')\"",
+    "clean": "rm -rf .next"
+  },
+  "dependencies": {
+    "@galiaf/sdk": "workspace:*",
+    "next": "15.5.3",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "socket.io-client": "4.8.1"
+  }
+}
