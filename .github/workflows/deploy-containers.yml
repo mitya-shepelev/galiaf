@@ -27,33 +27,36 @@ jobs:
           - service: public-site
             context: .
             dockerfile: apps/web/public-site/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-public-site
           - service: admin-portal
             context: .
             dockerfile: apps/web/admin-portal/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-admin-portal
           - service: manager-cabinet
             context: .
             dockerfile: apps/web/manager-cabinet/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-manager-cabinet
           - service: employee-cabinet
             context: .
             dockerfile: apps/web/employee-cabinet/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-employee-cabinet
           - service: core-api
             context: .
             dockerfile: apps/api/core-api/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-core-api
           - service: chat
             context: .
             dockerfile: services/chat/Dockerfile
-            image: ghcr.io/${{ github.repository_owner }}/galiaf-chat
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Resolve image tag namespace
+        id: image
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          SERVICE_NAME: ${{ matrix.service }}
+        run: |
+          owner_lc="${REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner_lc}/galiaf-${SERVICE_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,8 +75,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ${{ matrix.image }}:${{ github.event.workflow_run.head_sha }}
-            ${{ matrix.image }}:latest
+            ${{ steps.image.outputs.image }}:${{ github.event.workflow_run.head_sha }}
+            ${{ steps.image.outputs.image }}:latest
 
   call-deploy-webhook:
     runs-on: ubuntu-latest
