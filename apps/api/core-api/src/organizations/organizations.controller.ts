@@ -29,8 +29,11 @@ export class OrganizationsController {
 
   @Roles("platform_admin")
   @Post()
-  public create(@Body() payload: CreateOrganizationRequest) {
-    return this.organizations.create(payload);
+  public create(
+    @CurrentIdentity() identity: RequestIdentity,
+    @Body() payload: CreateOrganizationRequest,
+  ) {
+    return this.organizations.create(identity, payload);
   }
 
   @Roles("platform_admin", "company_manager")

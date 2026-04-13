@@ -1,4 +1,33 @@
 services:
+  loki:
+    profiles: ["observability"]
+    image: grafana/loki:3.6.0
+    container_name: galiaf-loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ../observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+
+  vector:
+    profiles: ["observability"]
+    image: timberio/vector:0.54.0-debian
+    container_name: galiaf-vector
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command: ["--config", "/etc/vector/vector.yaml"]
+    ports:
+      - "127.0.0.1:8686:8686"
+    volumes:
+      - ../observability/vector/vector.yaml:/etc/vector/vector.yaml:ro
+      - vector-data:/var/lib/vector
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${OBSERVABILITY_JOURNAL_DIR:-/var/log/journal}:/var/log/journal:ro
+      - ${OBSERVABILITY_RUN_JOURNAL_DIR:-/run/log/journal}:/run/log/journal:ro
+
   public-site:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-public-site:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -11,6 +40,11 @@ services:
       GALIAF_EMPLOYEE_CABINET_URL: ${GALIAF_EMPLOYEE_CABINET_URL}
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - core-api
 
@@ -22,6 +56,11 @@ services:
       GALIAF_API_BASE_URL: http://core-api:4000/api/v1
     ports:
       - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - core-api
 
@@ -34,6 +73,11 @@ services:
       GALIAF_CHAT_BASE_URL: http://chat:4010
     ports:
       - "3002:3002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - core-api
       - chat
@@ -47,6 +91,11 @@ services:
       GALIAF_CHAT_BASE_URL: http://chat:4010
     ports:
       - "3003:3003"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - core-api
       - chat
@@ -70,6 +119,11 @@ services:
       REDIS_URL: ${REDIS_URL}
     ports:
       - "4000:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/v1/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - postgres
       - redis
@@ -99,7 +153,7 @@ services:
     ports:
       - "4010:4010"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4010/api/v1/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4010/api/v1/health/ready"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -127,3 +181,5 @@ services:
 
 volumes:
   postgres-data:
+  loki-data:
+  vector-data:

@@ -7,6 +7,7 @@ import {
   Inject,
   Post,
 } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service.js";
 import { AuthConfigService } from "./auth-config.service.js";
 import { CurrentIdentity, Public } from "./auth.decorators.js";
 import type { RequestIdentity, SupportedRole } from "./auth.types.js";
@@ -21,6 +22,8 @@ export class AuthController {
   public constructor(
     @Inject(AuthConfigService)
     private readonly authConfig: AuthConfigService,
+    @Inject(AuditService)
+    private readonly audit: AuditService,
   ) {}
 
   @Public()
@@ -44,7 +47,7 @@ export class AuthController {
   }
 
   @Post("context/switch")
-  public switchContext(
+  public async switchContext(
     @CurrentIdentity() identity: RequestIdentity,
     @Body() payload: SwitchContextDto,
   ) {
@@ -57,6 +60,18 @@ export class AuthController {
           "The current identity does not have platform_admin access.",
         );
       }
+
+      await this.audit.record({
+        action: "auth_context_switch_requested",
+        entityType: "auth_context",
+        entityId: identity.sub,
+        actorIdentity: identity,
+        details: {
+          requestedRole,
+          targetTenantId: undefined,
+          clientId: identity.clientId,
+        },
+      });
 
       return {
         accepted: true,
@@ -82,6 +97,19 @@ export class AuthController {
         "The current identity does not have the requested tenant role.",
       );
     }
+
+    await this.audit.record({
+      action: "auth_context_switch_requested",
+      entityType: "auth_context",
+      entityId: identity.sub,
+      organizationId: targetTenantId,
+      actorIdentity: identity,
+      details: {
+        requestedRole,
+        targetTenantId,
+        clientId: identity.clientId,
+      },
+    });
 
     return {
       accepted: true,

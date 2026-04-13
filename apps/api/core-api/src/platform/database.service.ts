@@ -101,6 +101,28 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         expires_at timestamptz not null,
         created_at timestamptz not null default now()
       );
+
+      create table if not exists audit_events (
+        id text primary key,
+        action text not null,
+        entity_type text not null,
+        entity_id text not null,
+        organization_id text references organizations(id) on delete set null,
+        actor_subject text not null,
+        actor_user_id text references users(id) on delete set null,
+        actor_email text,
+        actor_name text,
+        actor_roles text[] not null default '{}',
+        actor_active_tenant_id text,
+        details jsonb not null default '{}'::jsonb,
+        created_at timestamptz not null default now()
+      );
+
+      create index if not exists audit_events_created_at_idx
+        on audit_events (created_at desc);
+
+      create index if not exists audit_events_organization_id_idx
+        on audit_events (organization_id, created_at desc);
     `);
   }
 

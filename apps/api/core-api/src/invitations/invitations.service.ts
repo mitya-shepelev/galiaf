@@ -10,6 +10,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AuditService } from "../audit/audit.service.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
 import { DomainStoreService } from "../domain/domain-store.service.js";
@@ -21,6 +22,8 @@ export class InvitationsService {
     private readonly store: DomainStoreService,
     @Inject(DomainAccessService)
     private readonly domainAccess: DomainAccessService,
+    @Inject(AuditService)
+    private readonly audit: AuditService,
   ) {}
 
   public async list(identity: RequestIdentity, organizationId?: string) {
@@ -43,13 +46,29 @@ export class InvitationsService {
     const inviter = await this.domainAccess.getOrCreateCurrentUser(identity);
     const roles = this.domainAccess.normalizeMembershipRoles(payload.roles);
 
-    return this.store.createInvitation({
+    const invitation = await this.store.createInvitation({
       organizationId: payload.organizationId,
       email: payload.email,
       targetName: payload.targetName,
       roles,
       invitedByUserId: inviter.id,
     });
+
+    await this.audit.record({
+      action: "invitation_created",
+      entityType: "invitation",
+      entityId: invitation.id,
+      organizationId: invitation.organizationId,
+      actorIdentity: identity,
+      actorUserId: inviter.id,
+      details: {
+        email: invitation.email,
+        targetName: invitation.targetName,
+        roles: invitation.roles,
+      },
+    });
+
+    return invitation;
   }
 
   public async revoke(identity: RequestIdentity, invitationId: string) {
@@ -64,9 +83,29 @@ export class InvitationsService {
       invitation.organizationId,
     );
 
-    return this.store.updateInvitation(invitationId, {
+    const revokedInvitation = await this.store.updateInvitation(invitationId, {
       status: "revoked",
     });
+
+    if (!revokedInvitation) {
+      throw new InternalServerErrorException(
+        "Invitation disappeared during revoke.",
+      );
+    }
+
+    await this.audit.record({
+      action: "invitation_revoked",
+      entityType: "invitation",
+      entityId: revokedInvitation.id,
+      organizationId: revokedInvitation.organizationId,
+      actorIdentity: identity,
+      details: {
+        email: revokedInvitation.email,
+        roles: revokedInvitation.roles,
+      },
+    });
+
+    return revokedInvitation;
   }
 
   public async accept(
@@ -119,6 +158,20 @@ export class InvitationsService {
         );
       }
 
+      await this.audit.record({
+        action: "invitation_accepted",
+        entityType: "invitation",
+        entityId: acceptedInvitation.id,
+        organizationId: acceptedInvitation.organizationId,
+        actorIdentity: identity,
+        actorUserId: user.id,
+        details: {
+          membershipId: existingMembership.id,
+          createdMembership: false,
+          roles: acceptedInvitation.roles,
+        },
+      });
+
       return {
         invitation: acceptedInvitation,
         membership: existingMembership,
@@ -142,6 +195,20 @@ export class InvitationsService {
         "Invitation disappeared during acceptance.",
       );
     }
+
+    await this.audit.record({
+      action: "invitation_accepted",
+      entityType: "invitation",
+      entityId: acceptedInvitation.id,
+      organizationId: acceptedInvitation.organizationId,
+      actorIdentity: identity,
+      actorUserId: user.id,
+      details: {
+        membershipId: membership.id,
+        createdMembership: true,
+        roles: acceptedInvitation.roles,
+      },
+    });
 
     return {
       invitation: acceptedInvitation,

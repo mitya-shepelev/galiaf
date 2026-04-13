@@ -3,6 +3,7 @@ import { AuthConfigService } from "./auth/auth-config.service.js";
 import { IdentityResolverService } from "./auth/identity-resolver.service.js";
 import { ChatGateway } from "./gateway/chat.gateway.js";
 import { HealthController } from "./health/health.controller.js";
+import { MetricsController } from "./metrics/metrics.controller.js";
 import { ChatAuthController } from "./auth/chat-auth.controller.js";
 import { ChatMessageStoreService } from "./messages/chat-message-store.service.js";
 import { ChatNotificationDispatcherService } from "./notifications/chat-notification-dispatcher.service.js";
@@ -13,7 +14,7 @@ import { ChatRealtimeService } from "./realtime/chat-realtime.service.js";
 import { ChatStateService } from "./state/chat-state.service.js";
 
 @Module({
-  controllers: [HealthController, ChatAuthController],
+  controllers: [HealthController, MetricsController, ChatAuthController],
   providers: [
     AuthConfigService,
     IdentityResolverService,

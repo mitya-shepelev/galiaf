@@ -3,6 +3,7 @@ import {
   ApiClient,
   createDevAuthHeaders,
   demoAuthContexts,
+  type AuditEventRecord,
   type MembershipRecord,
 } from "@galiaf/sdk";
 import {
@@ -49,6 +50,33 @@ function countActiveMemberships(
   ).length;
 }
 
+function formatAuditAction(action: AuditEventRecord["action"]): string {
+  switch (action) {
+    case "organization_created":
+      return "Организация создана";
+    case "organization_employee_provisioned":
+      return "Сотрудник provisioned";
+    case "invitation_created":
+      return "Приглашение создано";
+    case "invitation_revoked":
+      return "Приглашение отозвано";
+    case "invitation_accepted":
+      return "Приглашение принято";
+    case "membership_roles_updated":
+      return "Роли membership обновлены";
+    case "membership_revoked":
+      return "Membership отозван";
+    case "auth_context_switch_requested":
+      return "Запрошено переключение auth context";
+    case "admin_bootstrap_viewed":
+      return "Просмотрен admin bootstrap";
+    case "audit_events_viewed":
+      return "Просмотрен audit log";
+    default:
+      return action;
+  }
+}
+
 async function createOrganizationAction(
   _previousState: AdminActionState,
   formData: FormData,
@@ -89,7 +117,16 @@ async function createOrganizationAction(
 
 export default async function AdminPortalPage() {
   const api = createApiClient();
-  const [health, session, bootstrap, organizations, users, memberships, adminProfile] =
+  const [
+    health,
+    session,
+    bootstrap,
+    organizations,
+    users,
+    memberships,
+    adminProfile,
+    auditEvents,
+  ] =
     await Promise.all([
       api.getHealth(),
       api.getSession(),
@@ -98,6 +135,7 @@ export default async function AdminPortalPage() {
       api.listUsers(),
       api.listMemberships(),
       api.getCurrentUser(),
+      api.listAuditEvents({ limit: 8 }),
     ]);
   const activeMemberships = memberships.filter(
     (membership) => membership.status === "active",
@@ -315,6 +353,69 @@ export default async function AdminPortalPage() {
             })}
           </div>
         </article>
+      </section>
+      <section
+        style={{
+          marginTop: "16px",
+          background: "var(--panel)",
+          border: "1px solid var(--line)",
+          borderRadius: "24px",
+          padding: "24px",
+        }}
+      >
+        <p style={{ color: "var(--muted)", marginTop: 0 }}>Последние audit события</p>
+        <div style={{ display: "grid", gap: "12px" }}>
+          {auditEvents.length === 0 ? (
+            <article
+              style={{
+                border: "1px dashed var(--line)",
+                borderRadius: "16px",
+                padding: "16px",
+                color: "var(--muted)",
+              }}
+            >
+              Audit trail пока пуст. События появятся после действий в админке, manager flow и переключения контекста.
+            </article>
+          ) : null}
+          {auditEvents.map((event) => (
+            <article
+              key={event.id}
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: "16px",
+                padding: "16px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <strong>{formatAuditAction(event.action)}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {event.entityType}:{event.entityId}
+                  </p>
+                </div>
+                <p style={{ margin: 0, color: "var(--muted)", textAlign: "right" }}>
+                  {formatDate(event.createdAt)}
+                </p>
+              </div>
+              <p style={{ margin: "10px 0 0", color: "var(--muted)" }}>
+                Актор: {event.actorName ?? event.actorEmail ?? event.actorSubject}
+              </p>
+              <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                Роли: {event.actorRoles.join(", ") || "n/a"}
+              </p>
+              <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                Организация: {event.organizationId ?? "platform"}
+              </p>
+            </article>
+          ))}
+        </div>
       </section>
     </main>
   );

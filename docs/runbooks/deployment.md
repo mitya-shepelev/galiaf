@@ -11,11 +11,15 @@
 7. Выполняются health checks.
 
 Webhook payload описан отдельно в `docs/architecture/deploy-webhook-contract.md`.
+Health probes описаны отдельно в `docs/architecture/health-contract.md`.
+Metrics и log sources описаны отдельно в `docs/architecture/observability.md`.
+Отдельный runbook для centralized logs описан в `docs/runbooks/observability.md`.
 
 ## Требования к серверу
 
 - установлен Docker;
 - установлен Docker Compose plugin;
+- установлен Node.js 20+ для запуска webhook consumer;
 - настроен reverse proxy;
 - webhook endpoint защищен подписью или token-based validation;
 - настроено логирование контейнеров.
@@ -50,12 +54,209 @@ Webhook payload описан отдельно в `docs/architecture/deploy-webho
 - `AUTH_JWKS_URI`
 - `AUTH_ALLOWED_CORS_ORIGINS`
 
+## Минимальный server-side deploy stack
+
+На сервере можно использовать следующий skeleton из репозитория:
+
+- `infra/deploy/webhook-server.mjs`
+- `infra/deploy/deploy-release.sh`
+- `infra/deploy/check-health.sh`
+
+Пример запуска:
+
+```bash
+cd /opt/galiaf
+cp infra/compose/.env.example infra/compose/.env
+chmod +x infra/deploy/deploy-release.sh infra/deploy/check-health.sh
+
+export DEPLOY_WEBHOOK_TOKEN='replace-me'
+export DEPLOY_REPOSITORY='Mitya-Shepelev/galiaf'
+export DEPLOY_REF='main'
+node infra/deploy/webhook-server.mjs
+```
+
+Webhook consumer слушает:
+
+- `GET /health`
+- `POST /deploy`
+
+Для production его лучше запускать через `systemd`, `pm2` или другой supervisor.
+
+## Рекомендуемый systemd unit
+
+В репозитории добавлен пример:
+
+- `infra/deploy/galiaf-deploy-webhook.service`
+- `infra/deploy/deploy-webhook.env.example`
+
+Рекомендуемая установка на staging/production сервер:
+
+```bash
+sudo mkdir -p /etc/galiaf
+sudo cp /opt/galiaf/infra/deploy/deploy-webhook.env.example /etc/galiaf/deploy-webhook.env
+sudo cp /opt/galiaf/infra/deploy/galiaf-deploy-webhook.service /etc/systemd/system/galiaf-deploy-webhook.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now galiaf-deploy-webhook.service
+sudo systemctl status galiaf-deploy-webhook.service
+```
+
+Полезные команды:
+
+```bash
+sudo journalctl -u galiaf-deploy-webhook.service -f
+sudo systemctl restart galiaf-deploy-webhook.service
+curl http://127.0.0.1:8090/health
+curl http://127.0.0.1:8090/metrics
+```
+
+Если нужен reverse proxy, его стоит ограничить:
+
+- разрешить только `POST /deploy` и `GET /health`;
+- ограничить доступ по IP или internal network;
+- не публиковать webhook endpoint без token validation.
+
+## Пример nginx reverse proxy
+
+В репозитории добавлен пример:
+
+- `infra/deploy/nginx.deploy-webhook.conf.example`
+
+Базовый порядок:
+
+1. Скопировать пример в `/etc/nginx/sites-available/galiaf-deploy-webhook.conf`.
+2. Подставить реальный `server_name` и TLS certificate paths.
+3. При необходимости включить `allow/deny` правила для GitHub Actions IP ranges или internal network.
+4. Активировать конфиг и перезагрузить `nginx`.
+
+Минимальная проверка после этого:
+
+```bash
+curl -i https://deploy.example.com/deploy
+curl -i http://127.0.0.1:8090/health
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Порядок выполнения deploy по webhook
+
+1. GitHub Actions отправляет `POST /deploy`.
+2. `webhook-server.mjs` валидирует `X-Deploy-Token`, `repository`, `ref`, `sha`, `imageTag`.
+3. Consumer запускает `infra/deploy/deploy-release.sh <imageTag>`.
+4. Скрипт обновляет `IMAGE_TAG` в `infra/compose/.env`.
+5. Скрипт выполняет `docker compose pull`.
+6. Скрипт выполняет `docker compose up -d`.
+7. Скрипт запускает `infra/deploy/check-health.sh`.
+8. Логи пишутся в `logs/deploy-webhook.log`.
+
+`check-health.sh` использует readiness probes:
+
+- `core-api`: `/api/v1/health/ready`
+- `chat`: `/api/v1/health/ready`
+- web apps: `/api/health/ready`
+
 ## Rollback
 
 1. Определить последний стабильный image tag.
-2. Обновить compose manifest или deploy payload до стабильного тега.
-3. Перезапустить нужный сервис.
-4. Проверить health checks и критические бизнес-сценарии.
+2. Запустить `infra/deploy/deploy-release.sh <stable-tag>`.
+3. Проверить health checks и критические бизнес-сценарии.
+4. Если rollback не проходит, сохранить `docker compose logs` и логи webhook consumer.
+
+Пример:
+
+```bash
+cd /opt/galiaf
+infra/deploy/deploy-release.sh 24352821398
+```
+
+## Incident capture checklist
+
+При неуспешном deploy нужно сохранить минимум:
+
+```bash
+sudo journalctl -u galiaf-deploy-webhook.service --since '30 minutes ago' > /tmp/galiaf-deploy-webhook.log
+docker compose --env-file infra/compose/.env -f infra/compose/docker-compose.server.yml ps > /tmp/galiaf-compose-ps.log
+docker compose --env-file infra/compose/.env -f infra/compose/docker-compose.server.yml logs --tail=200 > /tmp/galiaf-compose.log
+cat logs/deploy-webhook.log > /tmp/galiaf-deploy-run.log
+```
+
+Дальше проверить:
+
+1. какой `imageTag` был запрошен;
+2. прошел ли `docker compose pull`;
+3. на каком сервисе упал healthcheck;
+4. можно ли откатиться на предыдущий стабильный tag.
+
+Для дополнительной диагностики можно снять metrics snapshot:
+
+```bash
+curl http://127.0.0.1:4000/api/v1/metrics
+curl http://127.0.0.1:4010/api/v1/metrics
+curl http://127.0.0.1:3000/api/metrics
+curl http://127.0.0.1:8090/metrics
+```
+
+Для centralized logs можно дополнительно поднять observability profile:
+
+```bash
+docker compose \
+  --env-file infra/compose/.env \
+  -f infra/compose/docker-compose.server.yml \
+  --profile observability \
+  up -d loki vector
+```
+
+## Audit retention
+
+Чтобы `audit_events` не росла бесконтрольно, в репозитории есть baseline команда очистки:
+
+```bash
+cd /opt/galiaf
+DATABASE_HOST=/var/run/postgresql \
+DATABASE_PORT=5432 \
+DATABASE_NAME=galiaf \
+DATABASE_USER=galiaf \
+DATABASE_PASSWORD='replace-me' \
+pnpm audit:prune -- --days=90
+```
+
+Рекомендуемый operational режим:
+
+1. запускать cleanup по расписанию раз в неделю;
+2. держать retention window не меньше `90` дней, если нет отдельного compliance требования;
+3. сохранять отдельные incident exports до cleanup, если идет разбор инцидента.
+
+## Staging first-deploy checklist
+
+Перед первым staging deploy:
+
+1. Подготовить `/opt/galiaf` и скопировать репозиторий на сервер.
+2. Заполнить `infra/compose/.env`.
+3. Заполнить `/etc/galiaf/deploy-webhook.env`.
+4. Убедиться, что сервер авторизован в GHCR.
+5. Проверить `docker compose ... config`.
+6. Проверить `node infra/deploy/webhook-server.mjs` локально на сервере.
+7. Поднять `systemd` unit.
+8. Проверить `GET /health` у webhook consumer.
+9. Поднять reverse proxy и проверить `nginx -t`.
+10. Выполнить ручной тест:
+
+```bash
+cd /opt/galiaf
+infra/deploy/deploy-release.sh latest
+```
+
+11. Отправить пробный `POST /deploy` с тестовым token из локальной сети.
+12. Только после этого указывать production webhook URL в GitHub Secrets.
+
+Пример ручного теста webhook:
+
+```bash
+curl --fail --show-error --silent \
+  -X POST http://127.0.0.1:8090/deploy \
+  -H "Content-Type: application/json" \
+  -H "X-Deploy-Token: replace-me" \
+  -d '{"sha":"manual-test-sha","imageTag":"latest","ref":"main","repository":"Mitya-Shepelev/galiaf"}'
+```
 
 ## Минимальный набор контейнеров
 

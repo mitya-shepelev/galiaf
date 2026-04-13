@@ -21,6 +21,19 @@ const managerIdentity = {
   ],
 };
 
+const platformAdminIdentity = {
+  sub: "demo-admin",
+  email: "admin@galiaf.local",
+  name: "Platform Admin",
+  issuer: "dev-bypass",
+  audiences: [],
+  scopes: [],
+  clientId: "galiaf-admin-portal",
+  activeTenantId: undefined,
+  platformRoles: ["platform_admin"],
+  tenantMemberships: [],
+};
+
 function createEmployeeIdentity(subject, email, fullName) {
   return {
     sub: subject,
@@ -82,6 +95,26 @@ async function main() {
 
   const health = await apiRequest("/health");
   assert(health.ok, `Healthcheck failed with status ${health.status}.`);
+
+  const adminBootstrapResponse = await apiRequest("/access/admin/bootstrap", {
+    headers: createHeaders(platformAdminIdentity),
+  });
+  assert(
+    adminBootstrapResponse.ok,
+    `Admin bootstrap failed: ${JSON.stringify(adminBootstrapResponse.body)}`,
+  );
+
+  const contextSwitchResponse = await apiRequest("/auth/context/switch", {
+    method: "POST",
+    headers: createHeaders(platformAdminIdentity, true),
+    body: JSON.stringify({
+      requestedRole: "platform_admin",
+    }),
+  });
+  assert(
+    contextSwitchResponse.ok,
+    `Auth context switch failed: ${JSON.stringify(contextSwitchResponse.body)}`,
+  );
 
   const invitationResponse = await apiRequest("/invitations", {
     method: "POST",
@@ -206,6 +239,51 @@ async function main() {
     `Manager memberships list failed: ${JSON.stringify(managerMembershipsResponse.body)}`,
   );
 
+  const auditEventsResponse = await apiRequest(
+    `/audit/events?organizationId=${encodeURIComponent(organizationId)}&limit=20`,
+    {
+      headers: createHeaders(platformAdminIdentity),
+    },
+  );
+  assert(
+    auditEventsResponse.ok,
+    `Audit events list failed: ${JSON.stringify(auditEventsResponse.body)}`,
+  );
+
+  const auditActions = auditEventsResponse.body.map((event) => event.action);
+  assert(
+    auditActions.includes("invitation_created"),
+    "Audit trail does not include invitation_created.",
+  );
+  assert(
+    auditActions.includes("invitation_accepted"),
+    "Audit trail does not include invitation_accepted.",
+  );
+  assert(
+    auditActions.includes("organization_employee_provisioned"),
+    "Audit trail does not include organization_employee_provisioned.",
+  );
+
+  const platformAuditResponse = await apiRequest("/audit/events?limit=20", {
+    headers: createHeaders(platformAdminIdentity),
+  });
+  assert(
+    platformAuditResponse.ok,
+    `Platform audit events list failed: ${JSON.stringify(platformAuditResponse.body)}`,
+  );
+
+  const platformAuditActions = platformAuditResponse.body.map(
+    (event) => event.action,
+  );
+  assert(
+    platformAuditActions.includes("admin_bootstrap_viewed"),
+    "Audit trail does not include admin_bootstrap_viewed.",
+  );
+  assert(
+    platformAuditActions.includes("auth_context_switch_requested"),
+    "Audit trail does not include auth_context_switch_requested.",
+  );
+
   console.log(
     JSON.stringify(
       {
@@ -227,6 +305,14 @@ async function main() {
         managerView: {
           users: managerUsersResponse.body.length,
           memberships: managerMembershipsResponse.body.length,
+        },
+        audit: {
+          events: auditEventsResponse.body.length,
+          actions: auditActions,
+        },
+        platformAudit: {
+          events: platformAuditResponse.body.length,
+          actions: platformAuditActions,
         },
       },
       null,

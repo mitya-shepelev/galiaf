@@ -1,4 +1,5 @@
 import type {
+  AuditEventRecord,
   AdminBootstrap,
   AuthSession,
   CreateInvitationRequest,
@@ -20,6 +21,7 @@ import type {
 } from "@galiaf/types";
 
 export type {
+  AuditEventRecord,
   AdminBootstrap,
   AuthSession,
   CreateInvitationRequest,
@@ -192,6 +194,25 @@ export class ApiClient {
 
   public getAdminBootstrap(): Promise<AdminBootstrap> {
     return this.request<AdminBootstrap>("/access/admin/bootstrap");
+  }
+
+  public listAuditEvents(input?: {
+    organizationId?: string;
+    limit?: number;
+  }): Promise<AuditEventRecord[]> {
+    const query = new URLSearchParams();
+
+    if (input?.organizationId) {
+      query.set("organizationId", input.organizationId);
+    }
+
+    if (typeof input?.limit === "number") {
+      query.set("limit", String(input.limit));
+    }
+
+    const pathname = query.size > 0 ? `/audit/events?${query.toString()}` : "/audit/events";
+
+    return this.request<AuditEventRecord[]>(pathname);
   }
 
   public getWorkspace(): Promise<WorkspaceAccess> {

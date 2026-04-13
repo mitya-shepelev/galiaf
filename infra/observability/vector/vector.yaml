@@ -1,0 +1,53 @@
+data_dir: /var/lib/vector
+
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+sources:
+  docker_logs:
+    type: docker_logs
+    auto_partial_merge: true
+    exclude_containers:
+      - galiaf-vector
+      - galiaf-loki
+
+  deploy_webhook_journald:
+    type: journald
+    include_units:
+      - galiaf-deploy-webhook.service
+    current_boot_only: true
+
+transforms:
+  normalize_docker_logs:
+    type: remap
+    inputs:
+      - docker_logs
+    source: |
+      .source_type = "docker"
+      .service = .container_name ?? "unknown"
+      .stream = .stream ?? "unknown"
+      .message = .message ?? ""
+
+  normalize_deploy_webhook_journald:
+    type: remap
+    inputs:
+      - deploy_webhook_journald
+    source: |
+      .source_type = "journald"
+      .service = "deploy-webhook"
+      .unit = ._SYSTEMD_UNIT ?? "galiaf-deploy-webhook.service"
+      .message = .MESSAGE ?? .message ?? ""
+
+sinks:
+  loki:
+    type: loki
+    inputs:
+      - normalize_docker_logs
+      - normalize_deploy_webhook_journald
+    endpoint: http://loki:3100
+    encoding:
+      codec: json
+    labels:
+      source: "{{ source_type }}"
+      service: "{{ service }}"

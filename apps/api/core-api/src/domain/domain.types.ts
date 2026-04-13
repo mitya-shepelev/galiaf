@@ -53,9 +53,38 @@ export interface InvitationRecord {
   createdAt: string;
 }
 
+export type AuditEventAction =
+  | "organization_created"
+  | "organization_employee_provisioned"
+  | "invitation_created"
+  | "invitation_revoked"
+  | "invitation_accepted"
+  | "membership_roles_updated"
+  | "membership_revoked"
+  | "auth_context_switch_requested"
+  | "admin_bootstrap_viewed"
+  | "audit_events_viewed";
+
+export interface AuditEventRecord {
+  id: string;
+  action: AuditEventAction;
+  entityType: string;
+  entityId: string;
+  organizationId?: string;
+  actorSubject: string;
+  actorUserId?: string;
+  actorEmail?: string;
+  actorName?: string;
+  actorRoles: SupportedRole[];
+  actorActiveTenantId?: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface DomainState {
   organizations: OrganizationRecord[];
   users: UserRecord[];
   memberships: MembershipRecord[];
   invitations: InvitationRecord[];
+  auditEvents: AuditEventRecord[];
 }

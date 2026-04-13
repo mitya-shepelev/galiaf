@@ -3,6 +3,7 @@ import type {
   CreateOrganizationEmployeeRequest,
   OrganizationEmployeeAccessRecord,
 } from "@galiaf/types";
+import { AuditService } from "../audit/audit.service.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
 import type { OrganizationRecord } from "../domain/domain.types.js";
@@ -15,6 +16,8 @@ export class OrganizationsService {
     private readonly store: DomainStoreService,
     @Inject(DomainAccessService)
     private readonly domainAccess: DomainAccessService,
+    @Inject(AuditService)
+    private readonly audit: AuditService,
   ) {}
 
   public async list(identity: RequestIdentity): Promise<OrganizationRecord[]> {
@@ -30,11 +33,27 @@ export class OrganizationsService {
     return this.domainAccess.findOrganizationOrFail(organizationId);
   }
 
-  public async create(input: {
+  public async create(
+    identity: RequestIdentity,
+    input: {
     name: string;
     status?: OrganizationRecord["status"];
   }): Promise<OrganizationRecord> {
-    return this.store.createOrganization(input);
+    const organization = await this.store.createOrganization(input);
+
+    await this.audit.record({
+      action: "organization_created",
+      entityType: "organization",
+      entityId: organization.id,
+      organizationId: organization.id,
+      actorIdentity: identity,
+      details: {
+        name: organization.name,
+        status: organization.status,
+      },
+    });
+
+    return organization;
   }
 
   public async createEmployee(
@@ -56,6 +75,20 @@ export class OrganizationsService {
       organizationId,
       roles,
       invitedByUserId: inviter.id,
+    });
+
+    await this.audit.record({
+      action: "organization_employee_provisioned",
+      entityType: "membership",
+      entityId: membership.id,
+      organizationId,
+      actorIdentity: identity,
+      actorUserId: inviter.id,
+      details: {
+        userId: user.id,
+        userEmail: user.email,
+        roles,
+      },
     });
 
     return {

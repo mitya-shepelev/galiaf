@@ -1,10 +1,12 @@
 import {
   ForbiddenException,
   Inject,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import type { UpdateMembershipRolesRequest } from "@galiaf/types";
+import { AuditService } from "../audit/audit.service.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
 import { DomainStoreService } from "../domain/domain-store.service.js";
@@ -16,6 +18,8 @@ export class MembershipsService {
     private readonly store: DomainStoreService,
     @Inject(DomainAccessService)
     private readonly domainAccess: DomainAccessService,
+    @Inject(AuditService)
+    private readonly audit: AuditService,
   ) {}
 
   public async list(identity: RequestIdentity, organizationId?: string) {
@@ -57,7 +61,26 @@ export class MembershipsService {
       throw new ForbiddenException("Only managers can assign manager role.");
     }
 
-    return this.store.updateMembershipRoles(membershipId, roles);
+    const updatedMembership = await this.store.updateMembershipRoles(membershipId, roles);
+
+    if (!updatedMembership) {
+      throw new InternalServerErrorException(
+        "Membership disappeared during role update.",
+      );
+    }
+
+    await this.audit.record({
+      action: "membership_roles_updated",
+      entityType: "membership",
+      entityId: updatedMembership.id,
+      organizationId: updatedMembership.organizationId,
+      actorIdentity: identity,
+      details: {
+        roles: updatedMembership.roles,
+      },
+    });
+
+    return updatedMembership;
   }
 
   public async revoke(identity: RequestIdentity, membershipId: string) {
@@ -73,6 +96,25 @@ export class MembershipsService {
       membership.organizationId,
     );
 
-    return this.store.revokeMembership(membershipId);
+    const revokedMembership = await this.store.revokeMembership(membershipId);
+
+    if (!revokedMembership) {
+      throw new InternalServerErrorException(
+        "Membership disappeared during revoke.",
+      );
+    }
+
+    await this.audit.record({
+      action: "membership_revoked",
+      entityType: "membership",
+      entityId: revokedMembership.id,
+      organizationId: revokedMembership.organizationId,
+      actorIdentity: identity,
+      details: {
+        roles: revokedMembership.roles,
+      },
+    });
+
+    return revokedMembership;
   }
 }

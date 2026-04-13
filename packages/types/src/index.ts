@@ -134,9 +134,15 @@ export interface CurrentUserProfile {
   resolvedOrganizations: OrganizationRecord[];
 }
 
+export type HealthStatus = "ok" | "error";
+
+export type HealthKind = "snapshot" | "liveness" | "readiness";
+
 export interface HealthReport {
-  status: "ok";
+  status: HealthStatus;
   service: string;
+  kind?: HealthKind;
+  ready?: boolean;
   database: "ok" | "error";
   redis: "ok" | "error";
   timestamp: string;
@@ -186,6 +192,34 @@ export interface OrganizationEmployeeAccessRecord {
 export interface InvitationAcceptanceResult {
   invitation: InvitationRecord;
   membership: MembershipRecord;
+}
+
+export type AuditEventAction =
+  | "organization_created"
+  | "organization_employee_provisioned"
+  | "invitation_created"
+  | "invitation_revoked"
+  | "invitation_accepted"
+  | "membership_roles_updated"
+  | "membership_revoked"
+  | "auth_context_switch_requested"
+  | "admin_bootstrap_viewed"
+  | "audit_events_viewed";
+
+export interface AuditEventRecord {
+  id: string;
+  action: AuditEventAction;
+  entityType: string;
+  entityId: string;
+  organizationId?: string;
+  actorSubject: string;
+  actorUserId?: string;
+  actorEmail?: string;
+  actorName?: string;
+  actorRoles: SupportedRole[];
+  actorActiveTenantId?: string;
+  details: Record<string, unknown>;
+  createdAt: string;
 }
 
 export type ChatRoomScope = "organization" | "direct";

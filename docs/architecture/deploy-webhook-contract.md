@@ -13,6 +13,7 @@
 ## HTTP запрос
 
 - Метод: `POST`
+- Path: `/deploy`
 - `Content-Type: application/json`
 - Header: `X-Deploy-Token: <token>`
 
@@ -38,3 +39,12 @@
    - `chat`
    - web кабинеты
 6. При ошибке завершить deploy как failed и сохранить логи для разбора.
+7. Не запускать параллельные deploy для разных `imageTag`, пока активный deploy не завершен.
+
+## Рекомендуемый server-side skeleton
+
+- `infra/deploy/webhook-server.mjs`: минимальный HTTP consumer.
+- `infra/deploy/deploy-release.sh`: обновляет `IMAGE_TAG` в `.env`, выполняет `docker compose pull` и `docker compose up -d`.
+- `infra/deploy/check-health.sh`: ожидает readiness `core-api`, `chat` и web сервисов.
+- `infra/deploy/galiaf-deploy-webhook.service`: пример `systemd` unit для production/staging.
+- `infra/deploy/nginx.deploy-webhook.conf.example`: пример reverse proxy для внешнего webhook endpoint.

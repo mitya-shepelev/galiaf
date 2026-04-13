@@ -1,12 +1,12 @@
 import { Module } from "@nestjs/common";
+import { AuditModule } from "../audit/audit.module.js";
 import { DomainModule } from "../domain/domain.module.js";
-import { DomainAccessService } from "../domain/domain-access.service.js";
 import { MembershipsController } from "./memberships.controller.js";
 import { MembershipsService } from "./memberships.service.js";
 
 @Module({
-  imports: [DomainModule],
+  imports: [DomainModule, AuditModule],
   controllers: [MembershipsController],
-  providers: [MembershipsService, DomainAccessService],
+  providers: [MembershipsService],
 })
 export class MembershipsModule {}

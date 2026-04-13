@@ -125,13 +125,16 @@
   - `CI` теперь включает `lint`, `typecheck`, `test`, `build` и live smoke checks для `core-api`, `chat` и web кабинетов;
   - публикация Docker images в GHCR привязана к успешному `CI` на `main`;
   - server compose приведен к реальным env contracts сервисов и webhook payload теперь несет `imageTag`.
+  - добавлен server-side skeleton для deploy webhook consumer, release script и health checks в `infra/deploy/`.
+  - добавлены staging checklist, incident capture steps и пример `systemd` unit для webhook consumer.
+  - добавлен пример `nginx` reverse proxy для внешней публикации deploy webhook endpoint.
 - Критерий выхода:
   - после merge/push артефакты собираются автоматически;
   - сервер обновляется по webhook без ручного SSH как основного пути.
 
 ### Phase 6. Security, Observability, Production Readiness
 
-- Статус: `planned`
+- Статус: `in_progress`
 - Цель: убрать главные риски перед production rollout.
 - Основные задачи:
   - завершить production OIDC configuration;
@@ -140,6 +143,16 @@
   - централизованные логи и базовые метрики;
   - rollback runbooks, incident runbooks, backup/restore policy;
   - rate limits, secret rotation, dependency review.
+- Текущий прогресс:
+  - для `core-api` и `chat` добавлены отдельные `snapshot`, `liveness` и `readiness` endpoints;
+  - для всех web приложений добавлены `/api/health/live` и `/api/health/ready`;
+  - server compose и deploy healthchecks переведены на readiness probes;
+  - health contract зафиксирован в `docs/architecture/health-contract.md`.
+  - добавлены JSON metrics endpoints для backend, web и deploy webhook consumer;
+  - для `core-api`, `chat` и deploy webhook consumer введены structured logs baseline.
+  - в `core-api` добавлен audit trail baseline для access-sensitive и security-sensitive событий с отдельным API endpoint и отображением в `admin-portal`.
+  - sensitive reads `admin bootstrap` и `audit log` теперь тоже попадают в audit trail, а для `audit_events` добавлен baseline retention path.
+  - для staging/server deployment добавлен centralized log sink baseline через `Vector + Loki` с capture Docker logs и `journald`, а `deploy-webhook.log` оставлен как локальный fallback trail.
 - Критерий выхода:
   - проект можно безопасно выкатывать в staging/production с понятной операционной моделью.
 
@@ -147,9 +160,9 @@
 
 Логичнее всего двигаться так:
 
-1. Довести контейнерный path до конца: проверить Docker build локально и на GitHub для всех publish-target сервисов.
-2. После этого отладить серверный webhook consumer и зафиксировать rollback/incident path на staging.
-3. Затем уже углубляться в более продуктовые сценарии и polish по кабинетам.
+1. Довести production OIDC hardening и security controls.
+2. После этого определить query UI, alerts и retention rules для log stack.
+3. Затем расширять audit coverage под новые admin capabilities и compliance требования.
 
 ## Что считаем успехом в ближайшие итерации
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
 import type { QueryResult, QueryResultRow } from "pg";
 import type {
+  AuditEventRecord,
   InvitationRecord,
   MembershipRecord,
   OrganizationRecord,
@@ -105,6 +106,38 @@ function mapInvitationRow(row: {
   };
 }
 
+function mapAuditEventRow(row: {
+  id: string;
+  action: AuditEventRecord["action"];
+  entity_type: string;
+  entity_id: string;
+  organization_id: string | null;
+  actor_subject: string;
+  actor_user_id: string | null;
+  actor_email: string | null;
+  actor_name: string | null;
+  actor_roles: AuditEventRecord["actorRoles"];
+  actor_active_tenant_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}): AuditEventRecord {
+  return {
+    id: row.id,
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    organizationId: row.organization_id ?? undefined,
+    actorSubject: row.actor_subject,
+    actorUserId: row.actor_user_id ?? undefined,
+    actorEmail: row.actor_email ?? undefined,
+    actorName: row.actor_name ?? undefined,
+    actorRoles: row.actor_roles,
+    actorActiveTenantId: row.actor_active_tenant_id ?? undefined,
+    details: row.details ?? {},
+    createdAt: row.created_at,
+  };
+}
+
 @Injectable()
 export class DomainStoreService {
   public constructor(
@@ -182,6 +215,94 @@ export class DomainStoreService {
     );
 
     return result.rows.map(mapInvitationRow);
+  }
+
+  public async listAuditEvents(input?: {
+    organizationId?: string;
+    limit?: number;
+  }): Promise<AuditEventRecord[]> {
+    const result = await this.database.query<{
+      id: string;
+      action: AuditEventRecord["action"];
+      entity_type: string;
+      entity_id: string;
+      organization_id: string | null;
+      actor_subject: string;
+      actor_user_id: string | null;
+      actor_email: string | null;
+      actor_name: string | null;
+      actor_roles: AuditEventRecord["actorRoles"];
+      actor_active_tenant_id: string | null;
+      details: Record<string, unknown> | null;
+      created_at: string;
+    }>(
+      `select id, action, entity_type, entity_id, organization_id, actor_subject,
+              actor_user_id, actor_email, actor_name, actor_roles,
+              actor_active_tenant_id, details, created_at
+       from audit_events
+       where ($1::text is null or organization_id = $1)
+       order by created_at desc
+       limit $2`,
+      [input?.organizationId ?? null, input?.limit ?? 50],
+    );
+
+    return result.rows.map(mapAuditEventRow);
+  }
+
+  public async createAuditEvent(input: {
+    action: AuditEventRecord["action"];
+    entityType: string;
+    entityId: string;
+    organizationId?: string;
+    actorSubject: string;
+    actorUserId?: string;
+    actorEmail?: string;
+    actorName?: string;
+    actorRoles: AuditEventRecord["actorRoles"];
+    actorActiveTenantId?: string;
+    details: Record<string, unknown>;
+  }): Promise<AuditEventRecord> {
+    const result = await this.database.query<{
+      id: string;
+      action: AuditEventRecord["action"];
+      entity_type: string;
+      entity_id: string;
+      organization_id: string | null;
+      actor_subject: string;
+      actor_user_id: string | null;
+      actor_email: string | null;
+      actor_name: string | null;
+      actor_roles: AuditEventRecord["actorRoles"];
+      actor_active_tenant_id: string | null;
+      details: Record<string, unknown> | null;
+      created_at: string;
+    }>(
+      `insert into audit_events (
+         id, action, entity_type, entity_id, organization_id, actor_subject,
+         actor_user_id, actor_email, actor_name, actor_roles,
+         actor_active_tenant_id, details
+       )
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+       returning id, action, entity_type, entity_id, organization_id, actor_subject,
+                 actor_user_id, actor_email, actor_name, actor_roles,
+                 actor_active_tenant_id, details, created_at`,
+      [
+        createId("audit"),
+        input.action,
+        input.entityType,
+        input.entityId,
+        input.organizationId ?? null,
+        input.actorSubject,
+        input.actorUserId ?? null,
+        input.actorEmail ?? null,
+        input.actorName ?? null,
+        input.actorRoles,
+        input.actorActiveTenantId ?? null,
+        JSON.stringify(input.details),
+      ],
+    );
+
+    return mapAuditEventRow(expectSingleRow(result, "createAuditEvent"));
   }
 
   public async createOrganization(input: {

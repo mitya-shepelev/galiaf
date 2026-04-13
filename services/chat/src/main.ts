@@ -4,6 +4,7 @@ import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "./app.module.js";
+import { installHttpAccessLogging } from "./observability/http-access-log.js";
 
 function resolveCorsOrigin(allowedOrigins: string[]): true | string[] {
   if (allowedOrigins.length === 0 || allowedOrigins.includes("*")) {
@@ -29,6 +30,8 @@ async function bootstrap() {
     ),
     credentials: true,
   });
+
+  installHttpAccessLogging(app, "chat");
 
   const port = Number(process.env.PORT ?? 4010);
   await app.listen(port, "0.0.0.0");

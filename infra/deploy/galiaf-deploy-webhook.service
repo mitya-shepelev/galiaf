@@ -1,0 +1,24 @@
+[Unit]
+Description=Galiaf Deploy Webhook Consumer
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=galiaf
+Group=galiaf
+WorkingDirectory=/opt/galiaf
+Environment=NODE_ENV=production
+Environment=DEPLOY_ROOT=/opt/galiaf
+Environment=DEPLOY_WEBHOOK_PORT=8090
+Environment=DEPLOY_REPOSITORY=Mitya-Shepelev/galiaf
+Environment=DEPLOY_REF=main
+EnvironmentFile=/etc/galiaf/deploy-webhook.env
+ExecStart=/usr/bin/node /opt/galiaf/infra/deploy/webhook-server.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

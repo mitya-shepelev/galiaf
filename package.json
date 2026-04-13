@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "audit:prune": "node scripts/prune-audit-events.mjs",
     "build": "turbo run build",
     "chat:smoke": "node scripts/chat-smoke-test.mjs",
     "core-api:manager:smoke": "node scripts/core-api-manager-smoke-test.mjs",

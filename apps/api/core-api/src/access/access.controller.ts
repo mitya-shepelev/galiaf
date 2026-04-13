@@ -1,9 +1,15 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 import { CurrentIdentity, Roles } from "../auth/auth.decorators.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
+import { AuditService } from "../audit/audit.service.js";
 
 @Controller("access")
 export class AccessController {
+  public constructor(
+    @Inject(AuditService)
+    private readonly audit: AuditService,
+  ) {}
+
   @Get("roles")
   public roles(@CurrentIdentity() identity: RequestIdentity) {
     return {
@@ -17,8 +23,8 @@ export class AccessController {
 
   @Roles("platform_admin")
   @Get("admin/bootstrap")
-  public adminBootstrap(@CurrentIdentity() identity: RequestIdentity) {
-    return {
+  public async adminBootstrap(@CurrentIdentity() identity: RequestIdentity) {
+    const payload = {
       dashboard: "platform-admin",
       subject: identity.sub,
       allowedAreas: [
@@ -28,6 +34,19 @@ export class AccessController {
         "service-health",
       ],
     };
+
+    await this.audit.record({
+      action: "admin_bootstrap_viewed",
+      entityType: "admin_bootstrap",
+      entityId: payload.dashboard,
+      actorIdentity: identity,
+      details: {
+        allowedAreas: payload.allowedAreas,
+        clientId: identity.clientId,
+      },
+    });
+
+    return payload;
   }
 
   @Roles("company_manager", "employee")
