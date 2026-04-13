@@ -78,6 +78,7 @@
   - в `manager-cabinet` уже подключены live actions для создания invitation и прямого provisioning сотрудника.
   - `employee-cabinet` переведен на live `users/me` и `workspace`, чтобы кабинет опирался только на разрешенные employee-scoped данные.
   - добавлен минимальный `web-cabinets` smoke test для live-проверки `admin`, `manager` и `employee` кабинетов.
+  - для всех трех кабинетов добавлены `loading` и `error` экраны, а также более явные `empty states` для пустых доменных данных.
 - Критерий выхода:
   - каждая роль может пройти свой базовый путь через web UI без ручных заглушек.
 
@@ -142,9 +143,9 @@
 
 Логичнее всего двигаться так:
 
-1. Оформить empty/error/loading states там, где кабинеты еще выглядят как технические экраны, а не продуктовые flows.
-2. После этого собрать базовый GitHub Actions + Docker delivery path, чтобы изменения можно было стабильно гонять через CI.
-3. Затем уже подключать эти smoke checks в GitHub Actions как часть delivery pipeline.
+1. После этого собрать базовый GitHub Actions + Docker delivery path, чтобы изменения можно было стабильно гонять через CI.
+2. Затем подключить `web` и `chat` smoke checks в GitHub Actions как часть delivery pipeline.
+3. После CI/CD уже углубляться в более продуктовые сценарии и polish по кабинетам.
 
 ## Что считаем успехом в ближайшие итерации
 

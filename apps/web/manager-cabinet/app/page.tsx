@@ -240,6 +240,18 @@ export default async function ManagerCabinetPage() {
             Доступные membership-контексты
           </p>
           <div style={{ display: "grid", gap: "8px" }}>
+            {workspace.availableMemberships.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                У текущего manager context пока нет доступных membership.
+              </div>
+            ) : null}
             {workspace.availableMemberships.map((membership) => (
               <div
                 key={membership.organizationId}
@@ -257,6 +269,18 @@ export default async function ManagerCabinetPage() {
             DB-backed профиль менеджера
           </p>
           <div style={{ display: "grid", gap: "8px" }}>
+            {managerProfile.resolvedOrganizations.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                В базе пока не найдено организаций, связанных с текущим менеджером.
+              </div>
+            ) : null}
             {managerProfile.resolvedOrganizations.map((organization) => (
               <div
                 key={organization.id}
@@ -281,6 +305,18 @@ export default async function ManagerCabinetPage() {
         >
           <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
           <div style={{ display: "grid", gap: "10px" }}>
+            {organizations.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                В активном контуре пока нет организаций для просмотра.
+              </div>
+            ) : null}
             {organizations.map((organization) => (
               <div
                 key={organization.id}

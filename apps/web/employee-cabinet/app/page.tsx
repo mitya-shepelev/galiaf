@@ -144,6 +144,18 @@ export default async function EmployeeCabinetPage() {
           </p>
           <p style={{ marginBottom: "8px" }}>Контексты доступа</p>
           <div style={{ display: "grid", gap: "8px" }}>
+            {workspace.availableMemberships.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  color: "var(--muted)",
+                }}
+              >
+                Для текущего employee context пока нет доступных membership.
+              </div>
+            ) : null}
             {workspace.availableMemberships.map((membership) => (
               <div
                 key={membership.organizationId}

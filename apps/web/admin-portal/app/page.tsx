@@ -222,6 +222,18 @@ export default async function AdminPortalPage() {
         >
           <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
           <div style={{ display: "grid", gap: "12px" }}>
+            {organizations.length === 0 ? (
+              <article
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "16px",
+                  padding: "16px",
+                  color: "var(--muted)",
+                }}
+              >
+                В платформе пока нет организаций. Можно создать первую через форму выше.
+              </article>
+            ) : null}
             {organizations.map((organization) => (
               <article
                 key={organization.id}
@@ -264,6 +276,18 @@ export default async function AdminPortalPage() {
             Пользователи платформы
           </p>
           <div style={{ display: "grid", gap: "12px" }}>
+            {users.length === 0 ? (
+              <article
+                style={{
+                  border: "1px dashed var(--line)",
+                  borderRadius: "16px",
+                  padding: "16px",
+                  color: "var(--muted)",
+                }}
+              >
+                Пользователи еще не появились. Они будут видны после первого входа или provisioning.
+              </article>
+            ) : null}
             {users.map((user) => {
               const userMemberships = activeMemberships.filter(
                 (membership) => membership.userId === user.id,
