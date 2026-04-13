@@ -11,6 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@galiaf/types": "workspace:*",
     "@fastify/cors": "11.1.0",
     "@nestjs/common": "11.1.6",
     "@nestjs/config": "4.0.2",

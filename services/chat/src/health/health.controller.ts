@@ -1,6 +1,7 @@
 import { Controller, Get, Inject } from "@nestjs/common";
 import { AuthConfigService } from "../auth/auth-config.service.js";
 import { ChatMessageStoreService } from "../messages/chat-message-store.service.js";
+import { ChatNotificationOutboxService } from "../notifications/chat-notification-outbox.service.js";
 import { ChatDatabaseService } from "../platform/chat-database.service.js";
 import { ChatRedisService } from "../platform/chat-redis.service.js";
 import { ChatStateService } from "../state/chat-state.service.js";
@@ -14,6 +15,8 @@ export class HealthController {
     private readonly database: ChatDatabaseService,
     @Inject(ChatMessageStoreService)
     private readonly messages: ChatMessageStoreService,
+    @Inject(ChatNotificationOutboxService)
+    private readonly notificationOutbox: ChatNotificationOutboxService,
     @Inject(ChatRedisService)
     private readonly redis: ChatRedisService,
     @Inject(ChatStateService)
@@ -30,6 +33,7 @@ export class HealthController {
       database: await this.database.healthcheck(),
       redis: await this.redis.healthcheck(),
       connections: this.chatState.getConnectionCount(),
+      notificationOutbox: await this.notificationOutbox.getStats(),
       timestamp: new Date().toISOString(),
     };
   }
@@ -45,6 +49,7 @@ export class HealthController {
       redis: await this.redis.healthcheck(),
       persistedMessages: stats.messages,
       persistedRooms: stats.rooms,
+      notificationOutbox: await this.notificationOutbox.getStats(),
       ...this.chatState.getSnapshot(),
       timestamp: new Date().toISOString(),
     };

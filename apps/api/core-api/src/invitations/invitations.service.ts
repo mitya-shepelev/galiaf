@@ -1,7 +1,12 @@
+import type {
+  CreateInvitationRequest,
+  InvitationAcceptanceResult,
+} from "@galiaf/types";
 import {
   BadRequestException,
   ForbiddenException,
   Inject,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -29,12 +34,7 @@ export class InvitationsService {
 
   public async create(
     identity: RequestIdentity,
-    payload: {
-      organizationId: string;
-      email: string;
-      targetName?: string;
-      roles: InvitationRecord["roles"];
-    },
+    payload: CreateInvitationRequest,
   ) {
     this.domainAccess.assertManagerForOrganization(
       identity,
@@ -42,12 +42,13 @@ export class InvitationsService {
     );
 
     const inviter = await this.domainAccess.getOrCreateCurrentUser(identity);
+    const roles = this.domainAccess.normalizeMembershipRoles(payload.roles);
 
     return this.store.createInvitation({
       organizationId: payload.organizationId,
       email: payload.email,
       targetName: payload.targetName,
-      roles: payload.roles,
+      roles,
       invitedByUserId: inviter.id,
     });
   }
@@ -69,7 +70,10 @@ export class InvitationsService {
     });
   }
 
-  public async accept(identity: RequestIdentity, invitationId: string) {
+  public async accept(
+    identity: RequestIdentity,
+    invitationId: string,
+  ): Promise<InvitationAcceptanceResult> {
     const invitation = await this.store.findInvitationById(invitationId);
 
     if (!invitation) {
@@ -105,11 +109,19 @@ export class InvitationsService {
     );
 
     if (existingMembership) {
+      const acceptedInvitation = await this.store.updateInvitation(invitationId, {
+        status: "accepted",
+        acceptedByUserId: user.id,
+      });
+
+      if (!acceptedInvitation) {
+        throw new InternalServerErrorException(
+          "Invitation disappeared during acceptance.",
+        );
+      }
+
       return {
-        invitation: this.store.updateInvitation(invitationId, {
-          status: "accepted",
-          acceptedByUserId: user.id,
-        }),
+        invitation: acceptedInvitation,
         membership: existingMembership,
       };
     }
@@ -121,11 +133,19 @@ export class InvitationsService {
       invitedByUserId: invitation.invitedByUserId,
     });
 
+    const acceptedInvitation = await this.store.updateInvitation(invitationId, {
+      status: "accepted",
+      acceptedByUserId: user.id,
+    });
+
+    if (!acceptedInvitation) {
+      throw new InternalServerErrorException(
+        "Invitation disappeared during acceptance.",
+      );
+    }
+
     return {
-      invitation: this.store.updateInvitation(invitationId, {
-        status: "accepted",
-        acceptedByUserId: user.id,
-      }),
+      invitation: acceptedInvitation,
       membership,
     };
   }

@@ -343,6 +343,56 @@ export class DomainStoreService {
     return mapUserRow(expectSingleRow(inserted, "upsertUserFromIdentity:insert"));
   }
 
+  public async provisionManagedUser(input: {
+    email: string;
+    fullName: string;
+  }): Promise<UserRecord> {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const normalizedFullName = input.fullName.trim();
+    const existing = await this.findUserByEmail(normalizedEmail);
+
+    if (existing) {
+      const updated = await this.database.query<{
+        id: string;
+        external_auth_subject: string;
+        email: string;
+        full_name: string;
+        status: UserRecord["status"];
+        created_at: string;
+      }>(
+        `update users
+         set email = $2,
+             full_name = $3
+         where id = $1
+         returning id, external_auth_subject, email, full_name, status, created_at`,
+        [existing.id, normalizedEmail, normalizedFullName],
+      );
+
+      return mapUserRow(expectSingleRow(updated, "provisionManagedUser:update"));
+    }
+
+    const inserted = await this.database.query<{
+      id: string;
+      external_auth_subject: string;
+      email: string;
+      full_name: string;
+      status: UserRecord["status"];
+      created_at: string;
+    }>(
+      `insert into users (id, external_auth_subject, email, full_name, status)
+       values ($1, $2, $3, $4, 'active')
+       returning id, external_auth_subject, email, full_name, status, created_at`,
+      [
+        createId("user"),
+        `managed:${normalizedEmail}`,
+        normalizedEmail,
+        normalizedFullName,
+      ],
+    );
+
+    return mapUserRow(expectSingleRow(inserted, "provisionManagedUser:insert"));
+  }
+
   public async createMembership(input: {
     userId: string;
     organizationId: string;
@@ -432,6 +482,26 @@ export class DomainStoreService {
     }
 
     return mapMembershipRow(row);
+  }
+
+  public async listMembershipsByUserId(userId: string): Promise<MembershipRecord[]> {
+    const result = await this.database.query<{
+      id: string;
+      user_id: string;
+      organization_id: string;
+      roles: MembershipRecord["roles"];
+      status: MembershipRecord["status"];
+      invited_by_user_id: string | null;
+      created_at: string;
+    }>(
+      `select id, user_id, organization_id, roles, status, invited_by_user_id, created_at
+       from memberships
+       where user_id = $1
+       order by created_at asc`,
+      [userId],
+    );
+
+    return result.rows.map(mapMembershipRow);
   }
 
   public async createInvitation(input: {

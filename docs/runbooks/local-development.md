@@ -11,6 +11,7 @@
 - `chat-service` использует Redis как realtime bus между инстансами и для shared participant counting по room.
 - `chat-service` использует lease-based room membership в Redis: heartbeat продлевает live sockets, а просроченные entries очищаются при очередном room count.
 - `chat-service` хранит delivery acknowledgements и read receipts в PostgreSQL и рассылает их как `chat:message-updated`.
+- `chat-service` использует notification outbox в PostgreSQL и публикует push-ready события в Redis channel `galiaf:chat:notifications`.
 - Локальная память в `chat-service` теперь держит только активные socket connections и runtime bookkeeping текущего процесса.
 
 ## Локальные зависимости
@@ -47,10 +48,15 @@
 - `REDIS_URL`
 - `CHAT_PRESENCE_TTL_SECONDS`
 - `CHAT_PRESENCE_HEARTBEAT_SECONDS`
+- `CHAT_NOTIFICATION_DISPATCH_INTERVAL_MS`
+- `CHAT_NOTIFICATION_BATCH_SIZE`
+- `CHAT_NOTIFICATION_STALE_SECONDS`
+- `CHAT_NOTIFICATION_MAX_ATTEMPTS`
 
 Если `CHAT_DATABASE_*` не заданы, сервис берет сетевые параметры из `DATABASE_*`, но по умолчанию использует отдельную БД `galiaf_chat`.
 Если `REDIS_URL` не задан, сервис использует `redis://:1234@127.0.0.1:6379`.
 Если `CHAT_PRESENCE_*` не заданы, сервис использует `TTL=45s` и `heartbeat=15s`.
+Если `CHAT_NOTIFICATION_*` не заданы, сервис использует `interval=2000ms`, `batch=100`, `stale=90s`, `maxAttempts=5`.
 
 ## Команды запуска
 
@@ -60,6 +66,15 @@
 cd /Applications/ServBay/www/galiaf/apps/api/core-api
 XDG_CACHE_HOME=/tmp/corepack-cache COREPACK_HOME=/tmp/corepack-home corepack pnpm dev
 ```
+
+Для backend smoke test manager flow:
+
+```bash
+cd /Applications/ServBay/www/galiaf
+node scripts/core-api-manager-smoke-test.mjs
+```
+
+Скрипт проверяет manager flow end-to-end: создание приглашения, принятие приглашения сотрудником, прямое provisioning сотрудника в организацию, DB-backed профиль `users/me`, доступ employee к workspace и запрет на `GET /users`.
 
 ### Web
 
@@ -108,7 +123,7 @@ cd /Applications/ServBay/www/galiaf
 node scripts/chat-smoke-test.mjs
 ```
 
-Скрипт поднимает два websocket-клиента, заводит их в `org:org_alpha`, отправляет сообщение от manager к employee, подтверждает `chat:ack-delivered` и `chat:ack-read`, проверяет broadcast `chat:message-updated`, а также убеждается, что unauthorized join в `org:org_bravo` блокируется.
+Скрипт поднимает два websocket-клиента, заводит их в `org:org_alpha`, отправляет сообщение от manager к employee, подтверждает `chat:ack-delivered` и `chat:ack-read`, проверяет broadcast `chat:message-updated`, подтверждает рост `notificationOutbox.dispatched` в `health/snapshot`, а также убеждается, что unauthorized join в `org:org_bravo` блокируется.
 
 Для split-instance smoke test:
 
@@ -159,5 +174,5 @@ curl -H 'x-dev-auth-context: {"sub":"demo-manager-alpha","email":"manager.alpha@
 
 - миграции и production schema strategy;
 - окончательный OIDC provider setup;
-- chat-service retention policy, push notifications и attachment pipeline;
+- chat-service retention policy и attachment pipeline;
 - production secrets management и rollback policy.

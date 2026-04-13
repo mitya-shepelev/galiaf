@@ -1,4 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type {
+  CreateOrganizationEmployeeRequest,
+  OrganizationEmployeeAccessRecord,
+} from "@galiaf/types";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
 import type { OrganizationRecord } from "../domain/domain.types.js";
@@ -31,5 +35,33 @@ export class OrganizationsService {
     status?: OrganizationRecord["status"];
   }): Promise<OrganizationRecord> {
     return this.store.createOrganization(input);
+  }
+
+  public async createEmployee(
+    identity: RequestIdentity,
+    organizationId: string,
+    payload: CreateOrganizationEmployeeRequest,
+  ): Promise<OrganizationEmployeeAccessRecord> {
+    this.domainAccess.assertManagerForOrganization(identity, organizationId);
+
+    const organization = await this.domainAccess.findOrganizationOrFail(organizationId);
+    const inviter = await this.domainAccess.getOrCreateCurrentUser(identity);
+    const roles = this.domainAccess.normalizeMembershipRoles(payload.roles);
+    const user = await this.store.provisionManagedUser({
+      email: payload.email,
+      fullName: payload.fullName,
+    });
+    const membership = await this.store.createMembership({
+      userId: user.id,
+      organizationId,
+      roles,
+      invitedByUserId: inviter.id,
+    });
+
+    return {
+      organization,
+      user,
+      membership,
+    };
   }
 }

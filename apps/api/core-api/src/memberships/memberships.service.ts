@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import type { UpdateMembershipRolesRequest } from "@galiaf/types";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { DomainAccessService } from "../domain/domain-access.service.js";
 import type { MembershipRecord } from "../domain/domain.types.js";
@@ -29,7 +30,7 @@ export class MembershipsService {
   public async updateRoles(
     identity: RequestIdentity,
     membershipId: string,
-    roles: MembershipRecord["roles"],
+    payload: UpdateMembershipRolesRequest,
   ) {
     const memberships = await this.store.getMemberships();
     const membership = memberships.find((item) => item.id === membershipId);
@@ -42,6 +43,8 @@ export class MembershipsService {
       identity,
       membership.organizationId,
     );
+
+    const roles = this.domainAccess.normalizeMembershipRoles(payload.roles);
 
     if (
       !identity.effectiveRoles.includes("platform_admin") &&

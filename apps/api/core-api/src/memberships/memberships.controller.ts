@@ -1,11 +1,8 @@
+import type { UpdateMembershipRolesRequest } from "@galiaf/types";
 import { Body, Controller, Get, Inject, Param, Patch, Query } from "@nestjs/common";
 import { CurrentIdentity, Roles } from "../auth/auth.decorators.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { MembershipsService } from "./memberships.service.js";
-
-interface UpdateMembershipRolesDto {
-  roles: Array<"company_manager" | "employee">;
-}
 
 @Controller("memberships")
 export class MembershipsController {
@@ -28,9 +25,9 @@ export class MembershipsController {
   public updateRoles(
     @CurrentIdentity() identity: RequestIdentity,
     @Param("membershipId") membershipId: string,
-    @Body() payload: UpdateMembershipRolesDto,
+    @Body() payload: UpdateMembershipRolesRequest,
   ) {
-    return this.memberships.updateRoles(identity, membershipId, payload.roles);
+    return this.memberships.updateRoles(identity, membershipId, payload);
   }
 
   @Patch(":membershipId/revoke")

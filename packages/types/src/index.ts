@@ -125,6 +125,15 @@ export interface AuthSession {
   scopes: string[];
 }
 
+export interface CurrentUserProfile {
+  user: UserRecord;
+  tenantMemberships: TenantMembership[];
+  effectiveRoles: SupportedRole[];
+  activeTenantId?: string;
+  resolvedMemberships: MembershipRecord[];
+  resolvedOrganizations: OrganizationRecord[];
+}
+
 export interface HealthReport {
   status: "ok";
   service: string;
@@ -144,6 +153,39 @@ export interface WorkspaceAccess {
   activeTenantId?: string;
   effectiveRoles: SupportedRole[];
   availableMemberships: TenantMembership[];
+}
+
+export interface CreateOrganizationRequest {
+  name: string;
+  status?: OrganizationStatus;
+}
+
+export interface CreateInvitationRequest {
+  organizationId: string;
+  email: string;
+  targetName?: string;
+  roles: MembershipRole[];
+}
+
+export interface UpdateMembershipRolesRequest {
+  roles: MembershipRole[];
+}
+
+export interface CreateOrganizationEmployeeRequest {
+  email: string;
+  fullName: string;
+  roles: MembershipRole[];
+}
+
+export interface OrganizationEmployeeAccessRecord {
+  organization: OrganizationRecord;
+  user: UserRecord;
+  membership: MembershipRecord;
+}
+
+export interface InvitationAcceptanceResult {
+  invitation: InvitationRecord;
+  membership: MembershipRecord;
 }
 
 export type ChatRoomScope = "organization" | "direct";
@@ -177,4 +219,19 @@ export interface ChatPresenceEvent {
   subject: string;
   state: "online" | "offline";
   timestamp: string;
+}
+
+export type ChatNotificationEventType =
+  | "room_message_created"
+  | "message_delivered"
+  | "message_read";
+
+export interface ChatNotificationEvent {
+  id: string;
+  eventType: ChatNotificationEventType;
+  roomId: string;
+  messageId: string;
+  actorSubject: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
 }

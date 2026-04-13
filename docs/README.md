@@ -7,6 +7,7 @@
 - `adr/`: архитектурные решения.
 - `pdr/`: продуктовые и проектные решения.
 - `architecture/`: схемы, контексты, доменные модели.
+- `roadmap/`: текущий план этапов и ближайших приоритетов.
 - `runbooks/`: инструкции по эксплуатации и деплою.
 
 ## Что уже зафиксировано
@@ -15,6 +16,7 @@
 - роли `platform_admin`, `company_manager`, `employee`;
 - centralized OIDC strategy и dev auth bypass для локальной разработки;
 - границы `core-api` и `chat-service`;
+- текущий roadmap по этапам реализации;
 - локальный runbook для backend, web и mobile.
 
 ## Базовое правило

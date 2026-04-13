@@ -1,3 +1,4 @@
+import type { CreateInvitationRequest } from "@galiaf/types";
 import {
   Body,
   Controller,
@@ -11,13 +12,6 @@ import {
 import { CurrentIdentity, Roles } from "../auth/auth.decorators.js";
 import type { RequestIdentity } from "../auth/auth.types.js";
 import { InvitationsService } from "./invitations.service.js";
-
-interface CreateInvitationDto {
-  organizationId: string;
-  email: string;
-  targetName?: string;
-  roles: Array<"company_manager" | "employee">;
-}
 
 @Controller("invitations")
 export class InvitationsController {
@@ -39,7 +33,7 @@ export class InvitationsController {
   @Roles("platform_admin", "company_manager")
   public create(
     @CurrentIdentity() identity: RequestIdentity,
-    @Body() payload: CreateInvitationDto,
+    @Body() payload: CreateInvitationRequest,
   ) {
     return this.invitations.create(identity, payload);
   }

@@ -9,6 +9,8 @@ const employeeChatBaseUrl =
   process.env.CHAT_SERVICE_URL_EMPLOYEE ??
   process.env.CHAT_SERVICE_URL ??
   managerChatBaseUrl;
+const chatServiceHttpBase =
+  process.env.CHAT_SERVICE_HTTP_URL ?? new URL(managerChatBaseUrl).origin;
 const roomId = process.env.CHAT_ROOM_ID ?? "org:org_alpha";
 
 const managerIdentity = {
@@ -98,10 +100,58 @@ async function waitForMatching(socket, eventName, matcher, timeoutMs = 4000) {
   });
 }
 
+async function fetchHealthSnapshot(chatHttpBaseUrl) {
+  const response = await fetch(`${chatHttpBaseUrl}/api/v1/health/snapshot`);
+
+  if (!response.ok) {
+    throw new Error(
+      `Health snapshot request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return response.json();
+}
+
+async function waitForOutboxDispatch(chatHttpBaseUrl, expectedDispatched, timeoutMs = 8000) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const snapshot = await fetchHealthSnapshot(chatHttpBaseUrl);
+    const stats = snapshot.notificationOutbox;
+
+    lastSnapshot = snapshot;
+
+    if (stats && typeof stats.dispatched === "number" && stats.dispatched >= expectedDispatched) {
+      return snapshot;
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for outbox dispatch (target=${expectedDispatched}). Last stats: ${JSON.stringify(
+      lastSnapshot?.notificationOutbox ?? null,
+    )}`,
+  );
+}
+
 async function main() {
   const manager = createClient(managerChatBaseUrl, managerIdentity);
   const employee = createClient(employeeChatBaseUrl, employeeIdentity);
   const testMessage = `smoke:${Date.now()}`;
+  const baselineSnapshot = await fetchHealthSnapshot(chatServiceHttpBase);
+  const baselineOutbox = baselineSnapshot.notificationOutbox;
+
+  if (
+    !baselineOutbox ||
+    typeof baselineOutbox.dispatched !== "number" ||
+    typeof baselineOutbox.pending !== "number"
+  ) {
+    throw new Error(
+      "Health snapshot does not expose notificationOutbox stats. Update chat-service first.",
+    );
+  }
 
   try {
     const managerConnected = waitFor(manager, "connect");
@@ -165,6 +215,10 @@ async function main() {
       messageId: managerMessage.id,
     });
     const managerReceiptUpdate = await managerReceiptUpdatePromise;
+    const outboxSnapshot = await waitForOutboxDispatch(
+      chatServiceHttpBase,
+      baselineOutbox.dispatched + 3,
+    );
 
     const employeeReceipt = readAck.receipts.find(
       (receipt) => receipt.subject === employeeIdentity.sub,
@@ -198,6 +252,10 @@ async function main() {
           deliveredAck,
           readAck,
           managerReceiptUpdate,
+          outbox: {
+            baseline: baselineOutbox,
+            current: outboxSnapshot.notificationOutbox,
+          },
           unauthorizedJoinBlocked,
         },
         null,

@@ -1,13 +1,20 @@
 import type {
   AdminBootstrap,
   AuthSession,
+  CreateInvitationRequest,
+  CreateOrganizationEmployeeRequest,
+  CreateOrganizationRequest,
+  CurrentUserProfile,
   HealthReport,
+  InvitationAcceptanceResult,
   InvitationRecord,
   MembershipRecord,
   OrganizationRecord,
+  OrganizationEmployeeAccessRecord,
   PublicAuthContract,
   SupportedRole,
   TenantMembership,
+  UpdateMembershipRolesRequest,
   UserRecord,
   WorkspaceAccess,
 } from "@galiaf/types";
@@ -15,13 +22,20 @@ import type {
 export type {
   AdminBootstrap,
   AuthSession,
+  CreateInvitationRequest,
+  CreateOrganizationEmployeeRequest,
+  CreateOrganizationRequest,
+  CurrentUserProfile,
   HealthReport,
+  InvitationAcceptanceResult,
   InvitationRecord,
   MembershipRecord,
   OrganizationRecord,
+  OrganizationEmployeeAccessRecord,
   PublicAuthContract,
   SupportedRole,
   TenantMembership,
+  UpdateMembershipRolesRequest,
   UserRecord,
   WorkspaceAccess,
 } from "@galiaf/types";
@@ -168,6 +182,10 @@ export class ApiClient {
     return this.request<AuthSession>("/auth/session");
   }
 
+  public getCurrentUser(): Promise<CurrentUserProfile> {
+    return this.request<CurrentUserProfile>("/users/me");
+  }
+
   public getAccessRoles(): Promise<AccessRolesSnapshot> {
     return this.request<AccessRolesSnapshot>("/access/roles");
   }
@@ -197,6 +215,28 @@ export class ApiClient {
     return this.request<UserRecord[]>("/users");
   }
 
+  public createOrganization(
+    payload: CreateOrganizationRequest,
+  ): Promise<OrganizationRecord> {
+    return this.request<OrganizationRecord>("/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public createOrganizationEmployee(
+    organizationId: string,
+    payload: CreateOrganizationEmployeeRequest,
+  ): Promise<OrganizationEmployeeAccessRecord> {
+    return this.request<OrganizationEmployeeAccessRecord>(
+      `/organizations/${encodeURIComponent(organizationId)}/employees`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  }
+
   public listMemberships(organizationId?: string): Promise<MembershipRecord[]> {
     const query = organizationId
       ? `?organizationId=${encodeURIComponent(organizationId)}`
@@ -205,12 +245,63 @@ export class ApiClient {
     return this.request<MembershipRecord[]>(`/memberships${query}`);
   }
 
+  public updateMembershipRoles(
+    membershipId: string,
+    payload: UpdateMembershipRolesRequest,
+  ): Promise<MembershipRecord> {
+    return this.request<MembershipRecord>(
+      `/memberships/${encodeURIComponent(membershipId)}/roles`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
+  }
+
+  public revokeMembership(membershipId: string): Promise<MembershipRecord> {
+    return this.request<MembershipRecord>(
+      `/memberships/${encodeURIComponent(membershipId)}/revoke`,
+      {
+        method: "PATCH",
+      },
+    );
+  }
+
   public listInvitations(organizationId?: string): Promise<InvitationRecord[]> {
     const query = organizationId
       ? `?organizationId=${encodeURIComponent(organizationId)}`
       : "";
 
     return this.request<InvitationRecord[]>(`/invitations${query}`);
+  }
+
+  public createInvitation(
+    payload: CreateInvitationRequest,
+  ): Promise<InvitationRecord> {
+    return this.request<InvitationRecord>("/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public revokeInvitation(invitationId: string): Promise<InvitationRecord> {
+    return this.request<InvitationRecord>(
+      `/invitations/${encodeURIComponent(invitationId)}/revoke`,
+      {
+        method: "PATCH",
+      },
+    );
+  }
+
+  public acceptInvitation(
+    invitationId: string,
+  ): Promise<InvitationAcceptanceResult> {
+    return this.request<InvitationAcceptanceResult>(
+      `/invitations/${encodeURIComponent(invitationId)}/accept`,
+      {
+        method: "POST",
+      },
+    );
   }
 
   private async request<T>(pathname: string, init?: RequestInit): Promise<T> {

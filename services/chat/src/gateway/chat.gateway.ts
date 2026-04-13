@@ -9,10 +9,15 @@ import {
   WsException,
 } from "@nestjs/websockets";
 import { Inject, Logger } from "@nestjs/common";
-import type { ChatPresenceEvent, RequestIdentity } from "@galiaf/types";
+import type {
+  ChatNotificationEventType,
+  ChatPresenceEvent,
+  RequestIdentity,
+} from "@galiaf/types";
 import type { Server, Socket } from "socket.io";
 import { IdentityResolverService } from "../auth/identity-resolver.service.js";
 import { ChatMessageStoreService } from "../messages/chat-message-store.service.js";
+import { ChatNotificationOutboxService } from "../notifications/chat-notification-outbox.service.js";
 import { ChatRedisService } from "../platform/chat-redis.service.js";
 import { ChatRealtimeService } from "../realtime/chat-realtime.service.js";
 import { ChatStateService } from "../state/chat-state.service.js";
@@ -69,6 +74,8 @@ export class ChatGateway
     private readonly identityResolver: IdentityResolverService,
     @Inject(ChatMessageStoreService)
     private readonly messages: ChatMessageStoreService,
+    @Inject(ChatNotificationOutboxService)
+    private readonly notificationOutbox: ChatNotificationOutboxService,
     @Inject(ChatRedisService)
     private readonly redis: ChatRedisService,
     @Inject(ChatRealtimeService)
@@ -213,6 +220,17 @@ export class ChatGateway
     const delivered = await this.messages.markDelivered(queued.id);
 
     await this.publishMessage(delivered);
+    await this.enqueueNotification({
+      eventType: "room_message_created",
+      roomId: delivered.roomId,
+      messageId: delivered.id,
+      actorSubject: identity.sub,
+      payload: {
+        authorSubject: delivered.authorSubject,
+        textPreview: delivered.text.slice(0, 140),
+        createdAt: delivered.createdAt,
+      },
+    });
 
     return delivered;
   }
@@ -227,6 +245,16 @@ export class ChatGateway
     const updated = await this.messages.ackDelivered(message.id, identity.sub);
 
     await this.publishMessageUpdated(updated);
+    await this.enqueueNotification({
+      eventType: "message_delivered",
+      roomId: updated.roomId,
+      messageId: updated.id,
+      actorSubject: identity.sub,
+      payload: {
+        acknowledgedBy: identity.sub,
+        deliveryStatus: updated.deliveryStatus,
+      },
+    });
 
     return updated;
   }
@@ -241,8 +269,35 @@ export class ChatGateway
     const updated = await this.messages.ackRead(message.id, identity.sub);
 
     await this.publishMessageUpdated(updated);
+    await this.enqueueNotification({
+      eventType: "message_read",
+      roomId: updated.roomId,
+      messageId: updated.id,
+      actorSubject: identity.sub,
+      payload: {
+        acknowledgedBy: identity.sub,
+      },
+    });
 
     return updated;
+  }
+
+  private async enqueueNotification(input: {
+    eventType: ChatNotificationEventType;
+    roomId: string;
+    messageId: string;
+    actorSubject: string;
+    payload?: Record<string, unknown>;
+  }) {
+    try {
+      await this.notificationOutbox.enqueue(input);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "unknown error";
+
+      this.logger.warn(
+        `Notification outbox enqueue failed (${input.eventType}, ${input.messageId}): ${errorMessage}`,
+      );
+    }
   }
 
   private async publishMessage(message: {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -119,7 +120,8 @@ export class DomainAccessService {
     const relatedUserIds = new Set(
       memberships
         .filter((membership) =>
-          managedOrganizationIds.has(membership.organizationId),
+          managedOrganizationIds.has(membership.organizationId) &&
+          membership.status === "active",
         )
         .map((membership) => membership.userId),
     );
@@ -191,6 +193,26 @@ export class DomainAccessService {
 
       return managedOrganizationIds.has(invitation.organizationId);
     });
+  }
+
+  public normalizeMembershipRoles(input: unknown): MembershipRecord["roles"] {
+    if (!Array.isArray(input) || input.length === 0) {
+      throw new BadRequestException("At least one membership role is required.");
+    }
+
+    const roles: MembershipRecord["roles"] = [];
+
+    for (const value of input) {
+      if (value !== "company_manager" && value !== "employee") {
+        throw new BadRequestException("Unsupported membership role.");
+      }
+
+      if (!roles.includes(value)) {
+        roles.push(value);
+      }
+    }
+
+    return roles;
   }
 
   private getManagedOrganizationIds(identity: RequestIdentity): Set<string> {

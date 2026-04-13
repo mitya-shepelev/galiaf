@@ -21,7 +21,7 @@
 - `apps/mobile/app`: мобильное приложение на Expo/React Native.
 - `services/chat`: отдельный чат-микросервис.
 - `packages/*`: общие библиотеки, типы, SDK и конфигурации.
-- `docs/*`: ADR, PDR, схемы, runbooks.
+- `docs/*`: ADR, PDR, roadmap, схемы, runbooks.
 - `infra/*`: Docker, CI/CD, IaC, deployment configs.
 
 ## GitHub и delivery
@@ -61,7 +61,8 @@
 
 1. Новый сервис нельзя добавлять без описания границ ответственности.
 2. Новый внешний интеграционный контракт должен быть отражен в `docs/architecture/` или `docs/api/`.
-3. Runbook обязателен для деплоя, rollback и инцидентов.
+3. Актуальный roadmap проекта хранится в `docs/roadmap/` и обновляется при изменении этапов, приоритетов или ближайших milestones.
+4. Runbook обязателен для деплоя, rollback и инцидентов.
 
 ## Definition of Done
 
