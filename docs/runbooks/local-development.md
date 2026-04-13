@@ -9,6 +9,8 @@
 - `chat-service` использует тот же auth contract для websocket handshake и tenant-aware комнат.
 - `chat-service` хранит историю сообщений в отдельной PostgreSQL базе `galiaf_chat`.
 - `chat-service` использует Redis как realtime bus между инстансами и для shared participant counting по room.
+- `chat-service` использует lease-based room membership в Redis: heartbeat продлевает live sockets, а просроченные entries очищаются при очередном room count.
+- `chat-service` хранит delivery acknowledgements и read receipts в PostgreSQL и рассылает их как `chat:message-updated`.
 - Локальная память в `chat-service` теперь держит только активные socket connections и runtime bookkeeping текущего процесса.
 
 ## Локальные зависимости
@@ -43,9 +45,12 @@
 - `CHAT_DATABASE_USER`
 - `CHAT_DATABASE_PASSWORD`
 - `REDIS_URL`
+- `CHAT_PRESENCE_TTL_SECONDS`
+- `CHAT_PRESENCE_HEARTBEAT_SECONDS`
 
 Если `CHAT_DATABASE_*` не заданы, сервис берет сетевые параметры из `DATABASE_*`, но по умолчанию использует отдельную БД `galiaf_chat`.
 Если `REDIS_URL` не задан, сервис использует `redis://:1234@127.0.0.1:6379`.
+Если `CHAT_PRESENCE_*` не заданы, сервис использует `TTL=45s` и `heartbeat=15s`.
 
 ## Команды запуска
 
@@ -103,7 +108,7 @@ cd /Applications/ServBay/www/galiaf
 node scripts/chat-smoke-test.mjs
 ```
 
-Скрипт поднимает два websocket-клиента, заводит их в `org:org_alpha`, отправляет сообщение от manager к employee, проверяет, что unauthorized join в `org:org_bravo` блокируется, и косвенно валидирует persistent storage через рабочий ack/message flow.
+Скрипт поднимает два websocket-клиента, заводит их в `org:org_alpha`, отправляет сообщение от manager к employee, подтверждает `chat:ack-delivered` и `chat:ack-read`, проверяет broadcast `chat:message-updated`, а также убеждается, что unauthorized join в `org:org_bravo` блокируется.
 
 Для split-instance smoke test:
 
@@ -115,6 +120,8 @@ node scripts/chat-smoke-test.mjs
 ```
 
 Этот прогон подтверждает межинстансовую доставку через Redis bus и shared participant counting.
+
+Дополнительно lease cleanup можно проверить, положив вручную просроченный member в Redis и затем повторив smoke test: join flow должен его вычистить и сохранить корректные `participantCount`.
 
 ## Проверка API
 
@@ -152,5 +159,5 @@ curl -H 'x-dev-auth-context: {"sub":"demo-manager-alpha","email":"manager.alpha@
 
 - миграции и production schema strategy;
 - окончательный OIDC provider setup;
-- chat-service retention policy, stale presence cleanup и crash-safe room membership strategy;
+- chat-service retention policy, push notifications и attachment pipeline;
 - production secrets management и rollback policy.

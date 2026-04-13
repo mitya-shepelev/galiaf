@@ -77,6 +77,27 @@ async function waitFor(socket, eventName, timeoutMs = 4000) {
   });
 }
 
+async function waitForMatching(socket, eventName, matcher, timeoutMs = 4000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off(eventName, onEvent);
+      reject(new Error(`Timed out waiting for ${eventName} match`));
+    }, timeoutMs);
+
+    function onEvent(payload) {
+      if (!matcher(payload)) {
+        return;
+      }
+
+      clearTimeout(timer);
+      socket.off(eventName, onEvent);
+      resolve(payload);
+    }
+
+    socket.on(eventName, onEvent);
+  });
+}
+
 async function main() {
   const manager = createClient(managerChatBaseUrl, managerIdentity);
   const employee = createClient(employeeChatBaseUrl, employeeIdentity);
@@ -127,6 +148,32 @@ async function main() {
       throw new Error("Message payload mismatch between manager and employee.");
     }
 
+    const managerReceiptUpdatePromise = waitForMatching(
+      manager,
+      "chat:message-updated",
+      (payload) =>
+        payload.id === managerMessage.id &&
+        payload.receipts.some(
+          (receipt) => receipt.subject === employeeIdentity.sub && receipt.readAt,
+        ),
+    );
+
+    const deliveredAck = await employee.timeout(4000).emitWithAck("chat:ack-delivered", {
+      messageId: managerMessage.id,
+    });
+    const readAck = await employee.timeout(4000).emitWithAck("chat:ack-read", {
+      messageId: managerMessage.id,
+    });
+    const managerReceiptUpdate = await managerReceiptUpdatePromise;
+
+    const employeeReceipt = readAck.receipts.find(
+      (receipt) => receipt.subject === employeeIdentity.sub,
+    );
+
+    if (!employeeReceipt?.deliveredAt || !employeeReceipt.readAt) {
+      throw new Error("Employee read receipt was not persisted correctly.");
+    }
+
     let unauthorizedJoinBlocked = false;
 
     try {
@@ -148,6 +195,9 @@ async function main() {
           employeeJoin,
           managerMessage,
           employeeMessage,
+          deliveredAck,
+          readAck,
+          managerReceiptUpdate,
           unauthorizedJoinBlocked,
         },
         null,

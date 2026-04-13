@@ -21,4 +21,19 @@ export const chatDatabaseMigrations: ChatDatabaseMigration[] = [
         on chat_messages (room_id, created_at desc);
     `,
   },
+  {
+    id: "0002_chat_message_receipts",
+    sql: `
+      create table if not exists chat_message_receipts (
+        message_id text not null references chat_messages(id) on delete cascade,
+        subject text not null,
+        delivered_at timestamptz,
+        read_at timestamptz,
+        primary key (message_id, subject)
+      );
+
+      create index if not exists chat_message_receipts_message_idx
+        on chat_message_receipts (message_id);
+    `,
+  },
 ];

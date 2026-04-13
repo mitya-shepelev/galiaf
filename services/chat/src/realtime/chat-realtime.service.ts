@@ -16,6 +16,11 @@ type ChatRealtimeEnvelope =
       payload: ChatMessageRecord;
     }
   | {
+      kind: "message-updated";
+      roomId: string;
+      payload: ChatMessageRecord;
+    }
+  | {
       kind: "presence";
       roomId: string;
       payload: ChatPresenceEvent;
@@ -79,6 +84,17 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  public async publishMessageUpdated(message: ChatMessageRecord): Promise<void> {
+    await this.redis.publish(
+      CHAT_EVENTS_CHANNEL,
+      JSON.stringify({
+        kind: "message-updated",
+        roomId: message.roomId,
+        payload: message,
+      } satisfies ChatRealtimeEnvelope),
+    );
+  }
+
   public async publishPresence(event: ChatPresenceEvent): Promise<void> {
     await this.redis.publish(
       CHAT_EVENTS_CHANNEL,
@@ -101,7 +117,11 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
       const parsed = JSON.parse(raw) as Partial<ChatRealtimeEnvelope>;
 
       if (
-        (parsed.kind === "message" || parsed.kind === "presence") &&
+        (
+          parsed.kind === "message" ||
+          parsed.kind === "message-updated" ||
+          parsed.kind === "presence"
+        ) &&
         typeof parsed.roomId === "string" &&
         parsed.payload
       ) {

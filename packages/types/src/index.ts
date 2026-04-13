@@ -163,6 +163,13 @@ export interface ChatMessageRecord {
   text: string;
   createdAt: string;
   deliveryStatus: "queued" | "delivered";
+  receipts: ChatMessageReceipt[];
+}
+
+export interface ChatMessageReceipt {
+  subject: string;
+  deliveredAt?: string;
+  readAt?: string;
 }
 
 export interface ChatPresenceEvent {

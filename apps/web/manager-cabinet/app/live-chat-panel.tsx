@@ -23,6 +23,22 @@ function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/u, "");
 }
 
+function upsertMessage(
+  current: ChatMessageRecord[],
+  payload: ChatMessageRecord,
+): ChatMessageRecord[] {
+  const next = [...current.filter((item) => item.id !== payload.id), payload];
+
+  return next.slice(-12);
+}
+
+function formatReceipts(message: ChatMessageRecord): string {
+  const delivered = message.receipts.filter((item) => item.deliveredAt).length;
+  const read = message.receipts.filter((item) => item.readAt).length;
+
+  return `delivery: ${message.deliveryStatus} · delivered: ${delivered} · read: ${read}`;
+}
+
 export function LiveChatPanel({
   chatBaseUrl,
   roomId,
@@ -98,11 +114,20 @@ export function LiveChatPanel({
     );
 
     socket.on("chat:message", (payload: ChatMessageRecord) => {
-      setMessages((current) => {
-        const next = [...current.filter((item) => item.id !== payload.id), payload];
+      setMessages((current) => upsertMessage(current, payload));
 
-        return next.slice(-12);
-      });
+      if (payload.authorSubject !== identity.sub) {
+        socket.timeout(3000).emit("chat:ack-delivered", {
+          messageId: payload.id,
+        });
+        socket.timeout(3000).emit("chat:ack-read", {
+          messageId: payload.id,
+        });
+      }
+    });
+
+    socket.on("chat:message-updated", (payload: ChatMessageRecord) => {
+      setMessages((current) => upsertMessage(current, payload));
     });
 
     socket.on(
@@ -224,7 +249,7 @@ export function LiveChatPanel({
                   <strong>{message.authorName ?? message.authorSubject}</strong>
                   <p style={{ margin: "6px 0" }}>{message.text}</p>
                   <p style={{ margin: 0, color: "var(--muted)" }}>
-                    {message.deliveryStatus} · {message.createdAt}
+                    {formatReceipts(message)} · {message.createdAt}
                   </p>
                 </div>
               ))

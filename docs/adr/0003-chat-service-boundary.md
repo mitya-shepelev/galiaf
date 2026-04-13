@@ -31,7 +31,7 @@ Realtime messaging имеет другой профиль нагрузки и ж
 
 Dev-реализация должна поддерживать тот же `x-dev-auth-context`, что и `core-api`, чтобы web/mobile и websocket smoke tests использовали одинаковый auth contract.
 
-История сообщений и delivery status должны храниться в отдельной БД `chat-service`, изолированной от `core-api`. Межинстансовая доставка realtime событий и shared room presence должны идти через Redis pub/sub. In-memory state допустим только для локальных socket connections и transient runtime bookkeeping внутри одного процесса.
+История сообщений, delivery acknowledgements и read receipts должны храниться в отдельной БД `chat-service`, изолированной от `core-api`. Межинстансовая доставка realtime событий и shared room presence должны идти через Redis pub/sub. Room membership и participant counting должны быть lease-based через Redis с heartbeat/TTL, чтобы stale entries очищались после падения процесса без ручного вмешательства. In-memory state допустим только для локальных socket connections и transient runtime bookkeeping внутри одного процесса.
 
 ## Последствия
 

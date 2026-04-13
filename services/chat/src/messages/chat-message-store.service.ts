@@ -1,6 +1,10 @@
 import { Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
 import type { QueryResult, QueryResultRow } from "pg";
-import type { ChatMessageRecord, RequestIdentity } from "@galiaf/types";
+import type {
+  ChatMessageReceipt,
+  ChatMessageRecord,
+  RequestIdentity,
+} from "@galiaf/types";
 import { ChatDatabaseService } from "../platform/chat-database.service.js";
 
 function createId(prefix: string): string {
@@ -22,7 +26,7 @@ function expectSingleRow<T extends QueryResultRow>(
   return row;
 }
 
-function mapMessageRow(row: {
+type ChatMessageRow = {
   id: string;
   room_id: string;
   author_subject: string;
@@ -30,7 +34,10 @@ function mapMessageRow(row: {
   text: string;
   created_at: string;
   delivery_status: ChatMessageRecord["deliveryStatus"];
-}): ChatMessageRecord {
+  receipts: ChatMessageReceipt[] | null;
+};
+
+function mapMessageRow(row: ChatMessageRow): ChatMessageRecord {
   return {
     id: row.id,
     roomId: row.room_id,
@@ -39,8 +46,33 @@ function mapMessageRow(row: {
     text: row.text,
     createdAt: row.created_at,
     deliveryStatus: row.delivery_status,
+    receipts: row.receipts ?? [],
   };
 }
+
+const messageSelectSql = `
+  select
+    m.id,
+    m.room_id,
+    m.author_subject,
+    m.author_name,
+    m.text,
+    m.created_at,
+    m.delivery_status,
+    coalesce(
+      json_agg(
+        json_build_object(
+          'subject', r.subject,
+          'deliveredAt', r.delivered_at,
+          'readAt', r.read_at
+        )
+        order by r.subject asc
+      ) filter (where r.subject is not null),
+      '[]'::json
+    ) as receipts
+  from chat_messages m
+  left join chat_message_receipts r on r.message_id = m.id
+`;
 
 @Injectable()
 export class ChatMessageStoreService {
@@ -81,49 +113,104 @@ export class ChatMessageStoreService {
         input.text,
       ],
     );
+    const row = expectSingleRow(result, "createQueuedMessage");
 
-    return mapMessageRow(expectSingleRow(result, "createQueuedMessage"));
+    return mapMessageRow({
+      ...row,
+      receipts: [],
+    });
   }
 
   public async markDelivered(messageId: string): Promise<ChatMessageRecord> {
-    const result = await this.database.query<{
-      id: string;
-      room_id: string;
-      author_subject: string;
-      author_name: string | null;
-      text: string;
-      created_at: string;
-      delivery_status: ChatMessageRecord["deliveryStatus"];
-    }>(
+    await this.database.query(
       `update chat_messages
        set delivery_status = 'delivered'
-       where id = $1
-       returning id, room_id, author_subject, author_name, text, created_at, delivery_status`,
+       where id = $1`,
       [messageId],
     );
 
-    return mapMessageRow(expectSingleRow(result, "markDelivered"));
+    const current = await this.getMessageById(messageId);
+
+    if (!current) {
+      throw new InternalServerErrorException(
+        `Expected to reload message ${messageId} after markDelivered.`,
+      );
+    }
+
+    return current;
+  }
+
+  public async getMessageById(messageId: string): Promise<ChatMessageRecord | undefined> {
+    const result = await this.database.query<ChatMessageRow>(
+      `${messageSelectSql}
+       where m.id = $1
+       group by m.id`,
+      [messageId],
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      return undefined;
+    }
+
+    return mapMessageRow(row);
   }
 
   public async getRecentMessages(roomId: string, limit = 30): Promise<ChatMessageRecord[]> {
-    const result = await this.database.query<{
-      id: string;
-      room_id: string;
-      author_subject: string;
-      author_name: string | null;
-      text: string;
-      created_at: string;
-      delivery_status: ChatMessageRecord["deliveryStatus"];
-    }>(
-      `select id, room_id, author_subject, author_name, text, created_at, delivery_status
-       from chat_messages
-       where room_id = $1
-       order by created_at desc
+    const result = await this.database.query<ChatMessageRow>(
+      `${messageSelectSql}
+       where m.room_id = $1
+       group by m.id
+       order by m.created_at desc
        limit $2`,
       [roomId, limit],
     );
 
     return result.rows.map(mapMessageRow).reverse();
+  }
+
+  public async ackDelivered(
+    messageId: string,
+    subject: string,
+  ): Promise<ChatMessageRecord> {
+    await this.database.query(
+      `insert into chat_message_receipts (message_id, subject, delivered_at)
+       values ($1, $2, now())
+       on conflict (message_id, subject) do update
+       set delivered_at = coalesce(chat_message_receipts.delivered_at, excluded.delivered_at)`,
+      [messageId, subject],
+    );
+
+    const updated = await this.getMessageById(messageId);
+
+    if (!updated) {
+      throw new InternalServerErrorException(
+        `Expected to reload message ${messageId} after ackDelivered.`,
+      );
+    }
+
+    return updated;
+  }
+
+  public async ackRead(messageId: string, subject: string): Promise<ChatMessageRecord> {
+    await this.database.query(
+      `insert into chat_message_receipts (message_id, subject, delivered_at, read_at)
+       values ($1, $2, now(), now())
+       on conflict (message_id, subject) do update
+       set delivered_at = coalesce(chat_message_receipts.delivered_at, excluded.delivered_at),
+           read_at = coalesce(chat_message_receipts.read_at, excluded.read_at)`,
+      [messageId, subject],
+    );
+
+    const updated = await this.getMessageById(messageId);
+
+    if (!updated) {
+      throw new InternalServerErrorException(
+        `Expected to reload message ${messageId} after ackRead.`,
+      );
+    }
+
+    return updated;
   }
 
   public async getStats(): Promise<{ messages: number; rooms: number }> {
@@ -136,7 +223,6 @@ export class ChatMessageStoreService {
          count(distinct room_id)::text as rooms
        from chat_messages`,
     );
-
     const row = expectSingleRow(result, "getStats");
 
     return {

@@ -22,6 +22,10 @@ interface ChatMessagePayload {
   text: string;
 }
 
+interface ChatMessageReceiptPayload {
+  messageId: string;
+}
+
 type AuthenticatedSocket = Socket & {
   data: {
     identity?: RequestIdentity;
@@ -91,6 +95,11 @@ export class ChatGateway
 
       if (event.kind === "message") {
         this.server.to(event.roomId).emit("chat:message", event.payload);
+        return;
+      }
+
+      if (event.kind === "message-updated") {
+        this.server.to(event.roomId).emit("chat:message-updated", event.payload);
         return;
       }
 
@@ -208,6 +217,34 @@ export class ChatGateway
     return delivered;
   }
 
+  @SubscribeMessage("chat:ack-delivered")
+  public async ackDelivered(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: ChatMessageReceiptPayload,
+  ) {
+    const identity = this.getIdentityOrThrow(client);
+    const message = await this.getAccessibleMessageOrThrow(identity, payload.messageId);
+    const updated = await this.messages.ackDelivered(message.id, identity.sub);
+
+    await this.publishMessageUpdated(updated);
+
+    return updated;
+  }
+
+  @SubscribeMessage("chat:ack-read")
+  public async ackRead(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: ChatMessageReceiptPayload,
+  ) {
+    const identity = this.getIdentityOrThrow(client);
+    const message = await this.getAccessibleMessageOrThrow(identity, payload.messageId);
+    const updated = await this.messages.ackRead(message.id, identity.sub);
+
+    await this.publishMessageUpdated(updated);
+
+    return updated;
+  }
+
   private async publishMessage(message: {
     roomId: string;
     authorSubject: string;
@@ -216,11 +253,37 @@ export class ChatGateway
     text: string;
     createdAt: string;
     deliveryStatus: "queued" | "delivered";
+    receipts: Array<{
+      subject: string;
+      deliveredAt?: string;
+      readAt?: string;
+    }>;
   }) {
     try {
       await this.realtime.publishMessage(message);
     } catch {
       this.server.to(message.roomId).emit("chat:message", message);
+    }
+  }
+
+  private async publishMessageUpdated(message: {
+    roomId: string;
+    authorSubject: string;
+    authorName?: string;
+    id: string;
+    text: string;
+    createdAt: string;
+    deliveryStatus: "queued" | "delivered";
+    receipts: Array<{
+      subject: string;
+      deliveredAt?: string;
+      readAt?: string;
+    }>;
+  }) {
+    try {
+      await this.realtime.publishMessageUpdated(message);
+    } catch {
+      this.server.to(message.roomId).emit("chat:message-updated", message);
     }
   }
 
@@ -260,6 +323,21 @@ export class ChatGateway
 
   private nextPresenceExpiryEpochMs(): number {
     return Date.now() + this.presenceTtlMs;
+  }
+
+  private async getAccessibleMessageOrThrow(
+    identity: RequestIdentity,
+    messageId: string,
+  ) {
+    const message = await this.messages.getMessageById(messageId);
+
+    if (!message) {
+      throw new WsException("Message not found.");
+    }
+
+    this.assertRoomAccess(identity, message.roomId);
+
+    return message;
   }
 
   private getIdentityOrThrow(client: AuthenticatedSocket): RequestIdentity {
