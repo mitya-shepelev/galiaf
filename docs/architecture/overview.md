@@ -18,7 +18,7 @@
 3. `services/chat` публикует push-ready события в Redis channel `galiaf:chat:notifications` (outbox pattern).
 4. Notification worker/bridge забирает эти события и доставляет их во внешние push-провайдеры.
 5. GitHub Actions собирает и публикует контейнеры.
-6. Deploy webhook запускает обновление контейнеров на сервере.
+6. Deploy webhook принимает `imageTag` и запускает обновление контейнеров на сервере.
 
 ## Стартовая структура каталогов
 

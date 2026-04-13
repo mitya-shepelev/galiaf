@@ -17,15 +17,13 @@ RUN pnpm --filter @galiaf/web-manager-cabinet build
 FROM node:20-alpine AS runner
 
 ENV NODE_ENV=production
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-
-RUN corepack enable
+ENV PORT=3002
 
 WORKDIR /app
 
-COPY --from=builder /app ./
+COPY --from=builder /app/apps/web/manager-cabinet/.next/standalone ./
+COPY --from=builder /app/apps/web/manager-cabinet/.next/static ./apps/web/manager-cabinet/.next/static
 
 EXPOSE 3002
 
-CMD ["pnpm", "--filter", "@galiaf/web-manager-cabinet", "start"]
+CMD ["node", "apps/web/manager-cabinet/server.js"]

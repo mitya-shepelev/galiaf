@@ -17,15 +17,13 @@ RUN pnpm --filter @galiaf/web-admin-portal build
 FROM node:20-alpine AS runner
 
 ENV NODE_ENV=production
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-
-RUN corepack enable
+ENV PORT=3001
 
 WORKDIR /app
 
-COPY --from=builder /app ./
+COPY --from=builder /app/apps/web/admin-portal/.next/standalone ./
+COPY --from=builder /app/apps/web/admin-portal/.next/static ./apps/web/admin-portal/.next/static
 
 EXPOSE 3001
 
-CMD ["pnpm", "--filter", "@galiaf/web-admin-portal", "start"]
+CMD ["node", "apps/web/admin-portal/server.js"]

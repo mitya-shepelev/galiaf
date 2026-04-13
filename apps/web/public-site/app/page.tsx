@@ -8,28 +8,32 @@ const highlights = [
   "Цифровые кабинеты для клиентов и сотрудников",
 ];
 
-const cabinetLinks = [
-  {
-    title: "Публичный сайт",
-    href: "http://127.0.0.1:3000",
-    note: "Маркетинговая витрина, контакты и заявки.",
-  },
-  {
-    title: "Admin Portal",
-    href: "http://127.0.0.1:3001",
-    note: "Управление платформой, аудит и сервисы.",
-  },
-  {
-    title: "Manager Cabinet",
-    href: "http://127.0.0.1:3002",
-    note: "Сотрудники, доступы и операции организации.",
-  },
-  {
-    title: "Employee Cabinet",
-    href: "http://127.0.0.1:3003",
-    note: "Рабочий кабинет сотрудника и персональный контур.",
-  },
-];
+function getCabinetLinks() {
+  return [
+    {
+      title: "Публичный сайт",
+      href: process.env.GALIAF_PUBLIC_SITE_URL ?? "http://127.0.0.1:3000",
+      note: "Маркетинговая витрина, контакты и заявки.",
+    },
+    {
+      title: "Admin Portal",
+      href: process.env.GALIAF_ADMIN_PORTAL_URL ?? "http://127.0.0.1:3001",
+      note: "Управление платформой, аудит и сервисы.",
+    },
+    {
+      title: "Manager Cabinet",
+      href:
+        process.env.GALIAF_MANAGER_CABINET_URL ?? "http://127.0.0.1:3002",
+      note: "Сотрудники, доступы и операции организации.",
+    },
+    {
+      title: "Employee Cabinet",
+      href:
+        process.env.GALIAF_EMPLOYEE_CABINET_URL ?? "http://127.0.0.1:3003",
+      note: "Рабочий кабинет сотрудника и персональный контур.",
+    },
+  ];
+}
 
 async function loadPlatformSnapshot() {
   const api = new ApiClient({
@@ -58,6 +62,7 @@ async function loadPlatformSnapshot() {
 
 export default async function HomePage() {
   const snapshot = await loadPlatformSnapshot();
+  const cabinetLinks = getCabinetLinks();
 
   return (
     <main

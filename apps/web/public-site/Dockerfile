@@ -17,15 +17,13 @@ RUN pnpm --filter @galiaf/web-public-site build
 FROM node:20-alpine AS runner
 
 ENV NODE_ENV=production
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-
-RUN corepack enable
+ENV PORT=3000
 
 WORKDIR /app
 
-COPY --from=builder /app ./
+COPY --from=builder /app/apps/web/public-site/.next/standalone ./
+COPY --from=builder /app/apps/web/public-site/.next/static ./apps/web/public-site/.next/static
 
 EXPOSE 3000
 
-CMD ["pnpm", "--filter", "@galiaf/web-public-site", "start"]
+CMD ["node", "apps/web/public-site/server.js"]

@@ -2,26 +2,54 @@ services:
   public-site:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-public-site:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      PORT: 3000
+      GALIAF_API_BASE_URL: http://core-api:4000/api/v1
+      GALIAF_PUBLIC_SITE_URL: ${GALIAF_PUBLIC_SITE_URL}
+      GALIAF_ADMIN_PORTAL_URL: ${GALIAF_ADMIN_PORTAL_URL}
+      GALIAF_MANAGER_CABINET_URL: ${GALIAF_MANAGER_CABINET_URL}
+      GALIAF_EMPLOYEE_CABINET_URL: ${GALIAF_EMPLOYEE_CABINET_URL}
     ports:
       - "3000:3000"
+    depends_on:
+      - core-api
 
   admin-portal:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-admin-portal:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      PORT: 3001
+      GALIAF_API_BASE_URL: http://core-api:4000/api/v1
     ports:
       - "3001:3001"
+    depends_on:
+      - core-api
 
   manager-cabinet:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-manager-cabinet:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      PORT: 3002
+      GALIAF_API_BASE_URL: http://core-api:4000/api/v1
+      GALIAF_CHAT_BASE_URL: http://chat:4010
     ports:
       - "3002:3002"
+    depends_on:
+      - core-api
+      - chat
 
   employee-cabinet:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-employee-cabinet:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      PORT: 3003
+      GALIAF_API_BASE_URL: http://core-api:4000/api/v1
+      GALIAF_CHAT_BASE_URL: http://chat:4010
     ports:
       - "3003:3003"
+    depends_on:
+      - core-api
+      - chat
 
   core-api:
     image: ghcr.io/${GHCR_NAMESPACE}/galiaf-core-api:${IMAGE_TAG:-latest}
@@ -29,11 +57,16 @@ services:
     environment:
       PORT: 4000
       AUTH_MODE: ${AUTH_MODE:-oidc}
+      AUTH_DEV_BYPASS_ENABLED: ${AUTH_DEV_BYPASS_ENABLED:-false}
       AUTH_ISSUER_URL: ${AUTH_ISSUER_URL}
       AUTH_AUDIENCE: ${AUTH_AUDIENCE:-galiaf-core-api}
       AUTH_JWKS_URI: ${AUTH_JWKS_URI}
       AUTH_ALLOWED_CORS_ORIGINS: ${AUTH_ALLOWED_CORS_ORIGINS}
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-galiaf}
+      DATABASE_USER: ${DATABASE_USER:-galiaf}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       REDIS_URL: ${REDIS_URL}
     ports:
       - "4000:4000"
@@ -46,11 +79,33 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4010
+      AUTH_MODE: ${AUTH_MODE:-oidc}
+      AUTH_DEV_BYPASS_ENABLED: ${AUTH_DEV_BYPASS_ENABLED:-false}
+      AUTH_ISSUER_URL: ${AUTH_ISSUER_URL}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-galiaf-core-api}
+      AUTH_JWKS_URI: ${AUTH_JWKS_URI}
+      AUTH_ALLOWED_CORS_ORIGINS: ${AUTH_ALLOWED_CORS_ORIGINS}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-galiaf}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      CHAT_DATABASE_HOST: ${CHAT_DATABASE_HOST:-postgres}
+      CHAT_DATABASE_PORT: ${CHAT_DATABASE_PORT:-5432}
+      CHAT_DATABASE_NAME: ${CHAT_DATABASE_NAME:-galiaf_chat}
+      CHAT_DATABASE_ADMIN_NAME: ${CHAT_DATABASE_ADMIN_NAME:-postgres}
+      CHAT_DATABASE_USER: ${CHAT_DATABASE_USER:-galiaf}
+      CHAT_DATABASE_PASSWORD: ${CHAT_DATABASE_PASSWORD}
       REDIS_URL: ${REDIS_URL}
     ports:
       - "4010:4010"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4010/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       - redis
+      - postgres
 
   postgres:
     image: postgres:17.6-alpine

@@ -113,7 +113,7 @@
 
 ### Phase 5. CI/CD And Delivery
 
-- Статус: `planned`
+- Статус: `in_progress`
 - Цель: перевести проект на предсказуемую сборку и доставку через GitHub Actions и Docker.
 - Основные задачи:
   - собрать workflow-ы на `lint`, `typecheck`, `test`, `build`;
@@ -121,6 +121,10 @@
   - webhook-triggered deploy на сервер;
   - Docker Compose или эквивалент для обновления контейнеров;
   - env/secrets strategy для GitHub, server и Expo.
+- Текущий прогресс:
+  - `CI` теперь включает `lint`, `typecheck`, `test`, `build` и live smoke checks для `core-api`, `chat` и web кабинетов;
+  - публикация Docker images в GHCR привязана к успешному `CI` на `main`;
+  - server compose приведен к реальным env contracts сервисов и webhook payload теперь несет `imageTag`.
 - Критерий выхода:
   - после merge/push артефакты собираются автоматически;
   - сервер обновляется по webhook без ручного SSH как основного пути.
@@ -143,9 +147,9 @@
 
 Логичнее всего двигаться так:
 
-1. После этого собрать базовый GitHub Actions + Docker delivery path, чтобы изменения можно было стабильно гонять через CI.
-2. Затем подключить `web` и `chat` smoke checks в GitHub Actions как часть delivery pipeline.
-3. После CI/CD уже углубляться в более продуктовые сценарии и polish по кабинетам.
+1. Довести контейнерный path до конца: проверить Docker build локально и на GitHub для всех publish-target сервисов.
+2. После этого отладить серверный webhook consumer и зафиксировать rollback/incident path на staging.
+3. Затем уже углубляться в более продуктовые сценарии и polish по кабинетам.
 
 ## Что считаем успехом в ближайшие итерации
 
