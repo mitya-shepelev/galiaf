@@ -19,6 +19,16 @@ const managerCapabilities = [
   "Контроль переписок и операционных уведомлений",
 ];
 
+function areDevPersonasEnabled(): boolean {
+  const raw = process.env.GALIAF_ENABLE_DEV_PERSONAS;
+
+  if (raw != null) {
+    return raw === "true";
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
 function createApiClient() {
   return new ApiClient({
     baseUrl: process.env.GALIAF_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1",
@@ -46,6 +56,14 @@ async function createInvitationAction(
   formData: FormData,
 ): Promise<ManagerActionState> {
   "use server";
+
+  if (!areDevPersonasEnabled()) {
+    return {
+      status: "error",
+      message:
+        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
+    };
+  }
 
   const organizationId = String(formData.get("organizationId") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -88,6 +106,14 @@ async function createEmployeeAction(
   formData: FormData,
 ): Promise<ManagerActionState> {
   "use server";
+
+  if (!areDevPersonasEnabled()) {
+    return {
+      status: "error",
+      message:
+        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
+    };
+  }
 
   const organizationId = String(formData.get("organizationId") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -133,6 +159,32 @@ function membershipBadge(membership?: MembershipRecord) {
 }
 
 export default async function ManagerCabinetPage() {
+  if (!areDevPersonasEnabled()) {
+    return (
+      <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+        <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
+          Company Manager
+        </p>
+        <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+          Demo personas отключены.
+        </h1>
+        <article
+          style={{
+            marginTop: "24px",
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
+            borderRadius: "24px",
+            padding: "24px",
+          }}
+        >
+          Этот кабинет больше не должен неявно работать через demo manager persona в
+          production. Настрой реальный OIDC flow или временно укажи
+          `GALIAF_ENABLE_DEV_PERSONAS=true` только для изолированного debug-окружения.
+        </article>
+      </main>
+    );
+  }
+
   const api = createApiClient();
   const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
   const [session, workspace, organizations, users, managerProfile] = await Promise.all([

@@ -4,6 +4,7 @@ import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "./app.module.js";
+import { AuthConfigService } from "./auth/auth-config.service.js";
 import { installHttpAccessLogging } from "./observability/http-access-log.js";
 
 function resolveCorsOrigin(allowedOrigins: string[]): true | string[] {
@@ -19,6 +20,7 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+  app.get(AuthConfigService).validateRuntimeSafety();
 
   app.setGlobalPrefix("api/v1");
   app.enableCors({

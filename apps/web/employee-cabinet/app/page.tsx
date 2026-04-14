@@ -15,6 +15,16 @@ const capabilityBlocks = [
   "Уведомления, профиль и рабочая история",
 ];
 
+function areDevPersonasEnabled(): boolean {
+  const raw = process.env.GALIAF_ENABLE_DEV_PERSONAS;
+
+  if (raw != null) {
+    return raw === "true";
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
 function createApiClient() {
   return new ApiClient({
     baseUrl: process.env.GALIAF_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1",
@@ -47,6 +57,30 @@ function organizationCaption(
 }
 
 export default async function EmployeeCabinetPage() {
+  if (!areDevPersonasEnabled()) {
+    return (
+      <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+        <p style={{ color: "var(--accent)", marginBottom: "10px" }}>Employee</p>
+        <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+          Demo personas отключены.
+        </h1>
+        <article
+          style={{
+            marginTop: "24px",
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
+            borderRadius: "24px",
+            padding: "24px",
+          }}
+        >
+          Этот кабинет больше не должен неявно работать через demo employee persona в
+          production. Настрой реальный OIDC flow или временно укажи
+          `GALIAF_ENABLE_DEV_PERSONAS=true` только для изолированного debug-окружения.
+        </article>
+      </main>
+    );
+  }
+
   const api = createApiClient();
   const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
   const [session, workspace, profile] = await Promise.all([

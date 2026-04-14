@@ -54,6 +54,50 @@ export class AuthConfigService {
     return raw === "true";
   }
 
+  public validateRuntimeSafety(): void {
+    const mode = this.getMode();
+    const devBypassEnabled = this.isDevBypassEnabled();
+    const publicOrigins = this.getAllowedCorsOrigins().filter((origin) =>
+      this.isPublicOrigin(origin),
+    );
+    const allowUnsafeDevBypass =
+      process.env.AUTH_UNSAFE_ALLOW_DEV_BYPASS === "true";
+
+    if (mode === "oidc") {
+      if (devBypassEnabled) {
+        throw new Error(
+          "AUTH_DEV_BYPASS_ENABLED must be false when AUTH_MODE=oidc.",
+        );
+      }
+
+      if (!process.env.AUTH_ISSUER_URL?.trim()) {
+        throw new Error(
+          "AUTH_ISSUER_URL must be configured when AUTH_MODE=oidc.",
+        );
+      }
+
+      if (!this.getAudience().trim()) {
+        throw new Error(
+          "AUTH_AUDIENCE must be configured when AUTH_MODE=oidc.",
+        );
+      }
+
+      return;
+    }
+
+    if (!devBypassEnabled) {
+      throw new Error(
+        "AUTH_MODE=dev requires AUTH_DEV_BYPASS_ENABLED=true for current auth flow.",
+      );
+    }
+
+    if (publicOrigins.length > 0 && !allowUnsafeDevBypass) {
+      throw new Error(
+        `Refusing to start with dev bypass on non-local origins (${publicOrigins.join(", ")}). Set AUTH_UNSAFE_ALLOW_DEV_BYPASS=true only for temporary internet-exposed debug deployments.`,
+      );
+    }
+  }
+
   public getPublicClientConfig(): PublicAuthContract["clients"] {
     return {
       adminWebClientId:
@@ -86,5 +130,21 @@ export class AuthConfigService {
         tenantMembershipsClaim: "tenant_memberships",
       },
     };
+  }
+
+  private isPublicOrigin(origin: string): boolean {
+    try {
+      const url = new URL(origin);
+      const host = url.hostname.toLowerCase();
+
+      return !(
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "::1" ||
+        host.endsWith(".local")
+      );
+    } catch {
+      return true;
+    }
   }
 }

@@ -20,6 +20,16 @@ const adminSections = [
   "Контроль доступности backend и chat сервисов",
 ];
 
+function areDevPersonasEnabled(): boolean {
+  const raw = process.env.GALIAF_ENABLE_DEV_PERSONAS;
+
+  if (raw != null) {
+    return raw === "true";
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
 function createApiClient() {
   return new ApiClient({
     baseUrl: process.env.GALIAF_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1",
@@ -83,6 +93,14 @@ async function createOrganizationAction(
 ): Promise<AdminActionState> {
   "use server";
 
+  if (!areDevPersonasEnabled()) {
+    return {
+      status: "error",
+      message:
+        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
+    };
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   const status = normalizeOrganizationStatus(formData.get("status"));
 
@@ -116,6 +134,32 @@ async function createOrganizationAction(
 }
 
 export default async function AdminPortalPage() {
+  if (!areDevPersonasEnabled()) {
+    return (
+      <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+        <p style={{ color: "var(--accent)", marginBottom: "12px" }}>
+          Platform Admin
+        </p>
+        <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+          Demo personas отключены.
+        </h1>
+        <article
+          style={{
+            marginTop: "24px",
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
+            borderRadius: "24px",
+            padding: "24px",
+          }}
+        >
+          Для production окружения этот кабинет больше не должен неявно использовать
+          `x-dev-auth-context`. Настрой реальный OIDC flow или временно укажи
+          `GALIAF_ENABLE_DEV_PERSONAS=true` только для изолированного debug-окружения.
+        </article>
+      </main>
+    );
+  }
+
   const api = createApiClient();
   const [
     health,

@@ -154,6 +154,7 @@
   - в `core-api` добавлен audit trail baseline для access-sensitive и security-sensitive событий с отдельным API endpoint и отображением в `admin-portal`.
   - sensitive reads `admin bootstrap` и `audit log` теперь тоже попадают в audit trail, а для `audit_events` добавлен baseline retention path.
   - для staging/server deployment добавлен centralized log sink baseline через `Vector + Loki` с capture Docker logs и `journald`, а `deploy-webhook.log` оставлен как локальный fallback trail.
+  - введены explicit guardrails, чтобы public deployment не мог неявно стартовать на dev bypass и demo personas без отдельного opt-in.
 - Критерий выхода:
   - проект можно безопасно выкатывать в staging/production с понятной операционной моделью.
 

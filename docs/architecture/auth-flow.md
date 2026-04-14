@@ -44,3 +44,16 @@
 - `public-site` использует публичный `auth/public-config` и `health` как live snapshot;
 - `admin-portal`, `manager-cabinet`, `employee-cabinet` используют общий SDK и `x-dev-auth-context`;
 - `mobile-app` должен уметь проверять `session`, `access/roles`, `workspace` и ожидаемые `403` для restricted routes в dev-режиме.
+
+## Guardrails для internet-facing окружений
+
+`dev bypass` и demo personas допустимы только как временный debug path.
+
+Для internet-facing deployment теперь требуется явный opt-in:
+
+- backend/chat:
+  - `AUTH_UNSAFE_ALLOW_DEV_BYPASS=true`
+- web кабинеты:
+  - `GALIAF_ENABLE_DEV_PERSONAS=true`
+
+Без этих флагов production-like deployment должен либо переходить на `OIDC`, либо явно блокировать demo auth usage.

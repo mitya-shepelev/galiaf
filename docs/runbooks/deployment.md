@@ -50,10 +50,12 @@ Metrics и log sources описаны отдельно в `docs/architecture/obs
 - `REDIS_URL`
 - `AUTH_MODE`
 - `AUTH_DEV_BYPASS_ENABLED`
+- `AUTH_UNSAFE_ALLOW_DEV_BYPASS`
 - `AUTH_ISSUER_URL`
 - `AUTH_AUDIENCE`
 - `AUTH_JWKS_URI`
 - `AUTH_ALLOWED_CORS_ORIGINS`
+- `GALIAF_ENABLE_DEV_PERSONAS`
 
 ## Dokploy production path
 
@@ -78,6 +80,26 @@ POST <DOKPLOY_URL>/application.deploy
 ```
 
 Это primary production path для Dokploy.
+
+## Временный public debug режим
+
+Если production-like deployment пока еще работает без реального OIDC и использует dev bypass, теперь это требует явного opt-in.
+
+Для `core-api` и `chat`:
+
+```text
+AUTH_MODE=dev
+AUTH_DEV_BYPASS_ENABLED=true
+AUTH_UNSAFE_ALLOW_DEV_BYPASS=true
+```
+
+Для `admin-portal`, `manager-cabinet`, `employee-cabinet`:
+
+```text
+GALIAF_ENABLE_DEV_PERSONAS=true
+```
+
+Без этих флагов backend/chat не поднимутся на non-local origins, а внутренние кабинеты покажут explicit auth-required экран вместо demo personas.
 
 ## Self-managed fallback deploy stack
 
