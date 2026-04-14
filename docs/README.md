@@ -26,6 +26,9 @@
 - Dokploy API deploy contract для production delivery path.
 - explicit opt-in guardrails для dev auth в public environments.
 - web OIDC bootstrap для внутренних кабинетов через HttpOnly session cookies.
+- short-lived chat bridge token для web OIDC realtime flow.
+- baseline Keycloak realm и runbook для переключения на `AUTH_MODE=oidc`.
+- baseline env examples для web-кабинетов при OIDC rollout.
 - server-side skeleton для webhook deploy в `infra/deploy/`.
 - staging/production deployment checklist и `systemd` unit для webhook consumer.
 - пример `nginx` reverse proxy для deploy webhook.

@@ -72,10 +72,13 @@ export default async function EmployeeCabinetPage() {
 
   try {
     const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
-    const [session, workspace, profile] = await Promise.all([
+    const [session, workspace, profile, chatBridge] = await Promise.all([
       auth.api.getSession(),
       auth.api.getWorkspace(),
       auth.api.getCurrentUser(),
+      auth.kind === "oidc"
+        ? auth.api.createChatBridgeToken().catch(() => null)
+        : Promise.resolve(null),
     ]);
     const currentOrganizationId = resolveOrganizationId(workspace);
     const organizationById = new Map(
@@ -347,9 +350,10 @@ export default async function EmployeeCabinetPage() {
             </div>
           </article>
         </section>
-        {auth.kind === "dev" ? (
+        {auth.kind === "dev" || chatBridge ? (
           <LiveChatPanel
             chatBaseUrl={chatBaseUrl}
+            bridgeToken={chatBridge?.token}
             identity={{
               sub: session.subject,
               issuer: session.issuer,
@@ -365,7 +369,11 @@ export default async function EmployeeCabinetPage() {
               rawClaims: {},
             }}
             roomId={`org:${currentOrganizationId ?? "org_alpha"}`}
-            subtitle="Минимальный live chat client для проверки подключения, presence и сообщений."
+            subtitle={
+              auth.kind === "dev"
+                ? "Минимальный live chat client для проверки подключения, presence и сообщений."
+                : `OIDC chat bridge активен до ${new Date(chatBridge?.expiresAt ?? Date.now()).toLocaleTimeString("ru-RU")}.`
+            }
             title="Live Chat"
           />
         ) : (
@@ -379,11 +387,10 @@ export default async function EmployeeCabinetPage() {
             }}
           >
             <p style={{ color: "var(--muted)", marginTop: 0 }}>
-              Realtime chat временно недоступен в OIDC-режиме.
+              Chat bridge пока не сконфигурирован.
             </p>
-            Для websocket нужен отдельный auth bridge без вывода access token в
-            клиентский runtime. Основной employee flow и границы доступа уже работают
-            через защищенную OIDC session.
+            Для OIDC realtime flow нужно добавить `CHAT_BRIDGE_SHARED_SECRET` в `core-api`
+            и `chat-service`.
           </section>
         )}
       </main>

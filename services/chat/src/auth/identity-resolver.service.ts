@@ -23,7 +23,7 @@ export class IdentityResolverService {
     const bearerToken = this.extractBearerToken(request.headers.authorization);
 
     if (bearerToken) {
-      return this.verifyOidcToken(bearerToken);
+      return this.verifyBearerToken(bearerToken);
     }
 
     const devHeader = request.headers["x-dev-auth-context"];
@@ -87,6 +87,41 @@ export class IdentityResolverService {
       return this.mapClaimsToIdentity(payload);
     } catch {
       throw new UnauthorizedException("Invalid or expired websocket token.");
+    }
+  }
+
+  private async verifyBridgeToken(token: string): Promise<RequestIdentity> {
+    const sharedSecret = this.authConfig.getChatBridgeSharedSecret();
+
+    if (!sharedSecret) {
+      throw new UnauthorizedException("Chat bridge token support is not configured.");
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, new TextEncoder().encode(sharedSecret), {
+        issuer: this.authConfig.getChatBridgeIssuer(),
+        audience: this.authConfig.getAudience(),
+      });
+
+      return this.mapClaimsToIdentity(payload);
+    } catch {
+      throw new UnauthorizedException("Invalid or expired chat bridge token.");
+    }
+  }
+
+  private async verifyBearerToken(token: string): Promise<RequestIdentity> {
+    try {
+      return await this.verifyOidcToken(token);
+    } catch (oidcError) {
+      try {
+        return await this.verifyBridgeToken(token);
+      } catch {
+        if (oidcError instanceof UnauthorizedException) {
+          throw oidcError;
+        }
+
+        throw new UnauthorizedException("Invalid or expired websocket token.");
+      }
     }
   }
 

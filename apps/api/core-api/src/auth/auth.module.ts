@@ -4,6 +4,7 @@ import { AuditModule } from "../audit/audit.module.js";
 import { AuthConfigService } from "./auth-config.service.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthenticationGuard, RolesGuard } from "./auth.guard.js";
+import { ChatBridgeTokenService } from "./chat-bridge-token.service.js";
 import { IdentityResolverService } from "./identity-resolver.service.js";
 
 @Module({
@@ -11,6 +12,7 @@ import { IdentityResolverService } from "./identity-resolver.service.js";
   controllers: [AuthController],
   providers: [
     AuthConfigService,
+    ChatBridgeTokenService,
     IdentityResolverService,
     {
       provide: APP_GUARD,
@@ -21,6 +23,6 @@ import { IdentityResolverService } from "./identity-resolver.service.js";
       useClass: RolesGuard,
     },
   ],
-  exports: [AuthConfigService, IdentityResolverService],
+  exports: [AuthConfigService, ChatBridgeTokenService, IdentityResolverService],
 })
 export class AuthModule {}

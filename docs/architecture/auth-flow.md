@@ -58,10 +58,12 @@
 
 ## Текущий компромисс по chat
 
-- backend и websocket already support bearer token;
-- web OIDC login для кабинетов уже включен;
-- realtime chat в web OIDC режиме временно отключен до отдельного websocket auth bridge;
-- dev/local режим с demo personas сохраняет текущий live chat client для smoke-проверок.
+- backend и websocket support bearer token;
+- web OIDC login для кабинетов включен;
+- `core-api` выпускает short-lived chat bridge token для web OIDC session;
+- `chat-service` принимает этот bridge token на websocket handshake;
+- основной OIDC access token не уходит в browser runtime для chat подключения;
+- dev/local режим с demo personas сохраняет текущий smoke-friendly path.
 
 ## Guardrails для internet-facing окружений
 

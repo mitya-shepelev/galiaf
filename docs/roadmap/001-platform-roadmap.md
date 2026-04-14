@@ -156,6 +156,9 @@
   - для staging/server deployment добавлен centralized log sink baseline через `Vector + Loki` с capture Docker logs и `journald`, а `deploy-webhook.log` оставлен как локальный fallback trail.
   - введены explicit guardrails, чтобы public deployment не мог неявно стартовать на dev bypass и demo personas без отдельного opt-in.
   - внутренние web-кабинеты получили baseline OIDC login/callback/logout flow с `HttpOnly` session cookies для server-side API access.
+  - для `manager` и `employee` добавлен short-lived chat bridge token, чтобы вернуть live websocket chat в web OIDC режиме.
+  - добавлен baseline Keycloak realm import и пошаговый runbook для переключения live окружения на `AUTH_MODE=oidc`.
+  - для Keycloak добавлен отдельный compose/runtime baseline под `auth.socvid.ru` с Dokploy-friendly env contract и healthcheck.
 - Критерий выхода:
   - проект можно безопасно выкатывать в staging/production с понятной операционной моделью.
 

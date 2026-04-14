@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { AuditService } from "../audit/audit.service.js";
 import { AuthConfigService } from "./auth-config.service.js";
+import { ChatBridgeTokenService } from "./chat-bridge-token.service.js";
 import { CurrentIdentity, Public } from "./auth.decorators.js";
 import type { RequestIdentity, SupportedRole } from "./auth.types.js";
 
@@ -22,6 +23,8 @@ export class AuthController {
   public constructor(
     @Inject(AuthConfigService)
     private readonly authConfig: AuthConfigService,
+    @Inject(ChatBridgeTokenService)
+    private readonly chatBridgeToken: ChatBridgeTokenService,
     @Inject(AuditService)
     private readonly audit: AuditService,
   ) {}
@@ -44,6 +47,11 @@ export class AuthController {
       effectiveRoles: identity.effectiveRoles,
       scopes: identity.scopes,
     };
+  }
+
+  @Get("chat-bridge-token")
+  public createChatBridgeToken(@CurrentIdentity() identity: RequestIdentity) {
+    return this.chatBridgeToken.issue(identity);
   }
 
   @Post("context/switch")

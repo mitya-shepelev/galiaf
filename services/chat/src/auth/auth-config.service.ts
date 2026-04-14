@@ -15,6 +15,16 @@ export class AuthConfigService {
     return process.env.AUTH_AUDIENCE ?? "galiaf-chat-service";
   }
 
+  public getChatBridgeIssuer(): string {
+    return process.env.CHAT_BRIDGE_ISSUER ?? "galiaf-core-api-chat-bridge";
+  }
+
+  public getChatBridgeSharedSecret(): string | null {
+    const raw = process.env.CHAT_BRIDGE_SHARED_SECRET?.trim();
+
+    return raw && raw.length > 0 ? raw : null;
+  }
+
   public getJwksUri(): string {
     const explicit = process.env.AUTH_JWKS_URI?.trim();
 

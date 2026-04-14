@@ -15,6 +15,29 @@ export class AuthConfigService {
     return process.env.AUTH_AUDIENCE ?? "galiaf-core-api";
   }
 
+  public getChatAudience(): string {
+    return process.env.CHAT_AUTH_AUDIENCE ?? "galiaf-chat-service";
+  }
+
+  public getChatBridgeIssuer(): string {
+    return process.env.CHAT_BRIDGE_ISSUER ?? "galiaf-core-api-chat-bridge";
+  }
+
+  public getChatBridgeSharedSecret(): string | null {
+    const raw = process.env.CHAT_BRIDGE_SHARED_SECRET?.trim();
+
+    return raw && raw.length > 0 ? raw : null;
+  }
+
+  public getChatBridgeTtlSeconds(): number {
+    const raw = Number.parseInt(
+      process.env.CHAT_BRIDGE_TOKEN_TTL_SECONDS ?? "300",
+      10,
+    );
+
+    return Number.isFinite(raw) && raw > 0 ? raw : 300;
+  }
+
   public getJwksUri(): string {
     const explicit = process.env.AUTH_JWKS_URI?.trim();
 

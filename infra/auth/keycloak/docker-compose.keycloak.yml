@@ -1,0 +1,33 @@
+services:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.0}
+    restart: unless-stopped
+    command:
+      - start
+      - --hostname=${KEYCLOAK_HOSTNAME:-https://auth.socvid.ru}
+      - --proxy-headers=${KEYCLOAK_PROXY_HEADERS:-xforwarded}
+      - --http-enabled=${KEYCLOAK_HTTP_ENABLED:-true}
+      - --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}
+      KC_HEALTH_ENABLED: ${KEYCLOAK_HEALTH_ENABLED:-true}
+      KC_METRICS_ENABLED: ${KEYCLOAK_METRICS_ENABLED:-true}
+      KC_HTTP_MANAGEMENT_HEALTH_ENABLED: ${KEYCLOAK_HTTP_MANAGEMENT_HEALTH_ENABLED:-true}
+      KC_DB: ${KEYCLOAK_DB:-postgres}
+      KC_DB_URL: ${KEYCLOAK_DB_URL}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USERNAME}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./realm-galiaf.json:/opt/keycloak/data/import/galiaf-realm.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/127.0.0.1/9000",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20

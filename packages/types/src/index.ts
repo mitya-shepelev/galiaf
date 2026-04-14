@@ -194,6 +194,11 @@ export interface InvitationAcceptanceResult {
   membership: MembershipRecord;
 }
 
+export interface ChatBridgeTokenResponse {
+  token: string;
+  expiresAt: string;
+}
+
 export type AuditEventAction =
   | "organization_created"
   | "organization_employee_provisioned"

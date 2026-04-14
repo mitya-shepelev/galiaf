@@ -10,6 +10,7 @@ type LiveChatPanelProps = {
   title: string;
   subtitle: string;
   identity: RequestIdentity;
+  bridgeToken?: string;
 };
 
 type JoinAck = {
@@ -45,6 +46,7 @@ export function LiveChatPanel({
   title,
   subtitle,
   identity,
+  bridgeToken,
 }: LiveChatPanelProps) {
   const socketRef = useRef<Socket | null>(null);
   const [status, setStatus] = useState("connecting");
@@ -58,9 +60,13 @@ export function LiveChatPanel({
     const socket = io(`${normalizeBaseUrl(chatBaseUrl)}/chat`, {
       autoConnect: false,
       transports: ["websocket"],
-      auth: {
-        devAuthContext: JSON.stringify(identity),
-      },
+      auth: bridgeToken
+        ? {
+            token: bridgeToken,
+          }
+        : {
+            devAuthContext: JSON.stringify(identity),
+          },
     });
 
     socketRef.current = socket;
@@ -150,7 +156,7 @@ export function LiveChatPanel({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [chatBaseUrl, identity, roomId]);
+  }, [bridgeToken, chatBaseUrl, identity, roomId]);
 
   function sendMessage() {
     const socket = socketRef.current;

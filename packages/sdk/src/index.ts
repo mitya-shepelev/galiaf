@@ -2,6 +2,7 @@ import type {
   AuditEventRecord,
   AdminBootstrap,
   AuthSession,
+  ChatBridgeTokenResponse,
   CreateInvitationRequest,
   CreateOrganizationEmployeeRequest,
   CreateOrganizationRequest,
@@ -24,6 +25,7 @@ export type {
   AuditEventRecord,
   AdminBootstrap,
   AuthSession,
+  ChatBridgeTokenResponse,
   CreateInvitationRequest,
   CreateOrganizationEmployeeRequest,
   CreateOrganizationRequest,
@@ -182,6 +184,10 @@ export class ApiClient {
 
   public getSession(): Promise<AuthSession> {
     return this.request<AuthSession>("/auth/session");
+  }
+
+  public createChatBridgeToken(): Promise<ChatBridgeTokenResponse> {
+    return this.request<ChatBridgeTokenResponse>("/auth/chat-bridge-token");
   }
 
   public getCurrentUser(): Promise<CurrentUserProfile> {

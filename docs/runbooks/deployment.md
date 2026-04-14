@@ -57,6 +57,9 @@ Metrics и log sources описаны отдельно в `docs/architecture/obs
 - `AUTH_ALLOWED_CORS_ORIGINS`
 - `GALIAF_ENABLE_DEV_PERSONAS`
 - `CHAT_AUTH_AUDIENCE`
+- `CHAT_BRIDGE_SHARED_SECRET`
+- `CHAT_BRIDGE_ISSUER`
+- `CHAT_BRIDGE_TOKEN_TTL_SECONDS`
 - `AUTH_ADMIN_WEB_CLIENT_ID`
 - `AUTH_MANAGER_WEB_CLIENT_ID`
 - `AUTH_EMPLOYEE_WEB_CLIENT_ID`
@@ -127,7 +130,27 @@ GALIAF_ENABLE_DEV_PERSONAS=true
 - `AUTH_*_WEB_CLIENT_ID` на backend совпадают с OIDC provider clients;
 - redirect URI может быть вычислен от реального origin кабинета.
 
-Важно: `manager` и `employee` в OIDC-режиме пока не включают live websocket chat. Для этого нужен отдельный auth bridge, который не будет светить access token в client runtime.
+Важно: live websocket chat в OIDC-режиме теперь опирается на отдельный short-lived auth bridge token, а не на основной access token пользователя.
+
+## Chat bridge для web OIDC
+
+Для live chat в `manager-cabinet` и `employee-cabinet` теперь нужен общий env на `core-api` и `chat-service`:
+
+```text
+CHAT_BRIDGE_SHARED_SECRET=...
+CHAT_BRIDGE_ISSUER=galiaf-core-api-chat-bridge
+CHAT_BRIDGE_TOKEN_TTL_SECONDS=300
+CHAT_AUTH_AUDIENCE=galiaf-chat-service
+```
+
+Поток такой:
+
+1. web-кабинет работает через OIDC session cookie;
+2. server-side вызывает `GET /api/v1/auth/chat-bridge-token`;
+3. `core-api` выпускает short-lived audience-scoped token;
+4. browser websocket client использует только этот bridge token для `chat-service`.
+
+Если `CHAT_BRIDGE_SHARED_SECRET` не задан, кабинет не должен падать целиком: UI останется доступным, а chat покажет explicit configuration message.
 
 ## Self-managed fallback deploy stack
 

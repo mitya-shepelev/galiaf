@@ -177,12 +177,16 @@ export default async function ManagerCabinetPage() {
 
   try {
     const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
-    const [session, workspace, organizations, users, managerProfile] = await Promise.all([
+    const [session, workspace, organizations, users, managerProfile, chatBridge] =
+      await Promise.all([
       auth.api.getSession(),
       auth.api.getWorkspace(),
       auth.api.listOrganizations(),
       auth.api.listUsers(),
       auth.api.getCurrentUser(),
+      auth.kind === "oidc"
+        ? auth.api.createChatBridgeToken().catch(() => null)
+        : Promise.resolve(null),
     ]);
     const currentOrganizationId = resolveOrganizationId(workspace);
     const [memberships, invitations] = await Promise.all([
@@ -478,9 +482,10 @@ export default async function ManagerCabinetPage() {
             </div>
           </article>
         </section>
-        {auth.kind === "dev" ? (
+        {auth.kind === "dev" || chatBridge ? (
           <LiveChatPanel
             chatBaseUrl={chatBaseUrl}
+            bridgeToken={chatBridge?.token}
             identity={{
               sub: session.subject,
               issuer: session.issuer,
@@ -496,7 +501,11 @@ export default async function ManagerCabinetPage() {
               rawClaims: {},
             }}
             roomId={`org:${currentOrganizationId}`}
-            subtitle="Минимальный live chat client для smoke-проверки manager/employee потока."
+            subtitle={
+              auth.kind === "dev"
+                ? "Минимальный live chat client для smoke-проверки manager/employee потока."
+                : `OIDC chat bridge активен до ${new Date(chatBridge?.expiresAt ?? Date.now()).toLocaleTimeString("ru-RU")}.`
+            }
             title="Live Chat"
           />
         ) : (
@@ -510,11 +519,10 @@ export default async function ManagerCabinetPage() {
             }}
           >
             <p style={{ color: "var(--muted)", marginTop: 0 }}>
-              Realtime chat временно недоступен в OIDC-режиме.
+              Chat bridge пока не сконфигурирован.
             </p>
-            Для websocket нужен отдельный auth bridge без вывода access token в
-            клиентский runtime. API и tenant-операции уже работают через защищенную
-            OIDC session.
+            Для OIDC realtime flow нужно добавить `CHAT_BRIDGE_SHARED_SECRET` в `core-api`
+            и `chat-service`.
           </section>
         )}
       </main>
