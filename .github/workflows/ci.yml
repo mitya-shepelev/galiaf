@@ -91,6 +91,7 @@ jobs:
       CHAT_SERVICE_URL: http://127.0.0.1:4010/chat
       GALIAF_API_BASE_URL: http://127.0.0.1:4000/api/v1
       GALIAF_CHAT_BASE_URL: http://127.0.0.1:4010
+      GALIAF_ENABLE_DEV_PERSONAS: "true"
 
     steps:
       - name: Checkout
