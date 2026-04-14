@@ -38,6 +38,7 @@
 - code flow с PKCE;
 - итоговая сессия должна жить в защищенной cookie web-приложения;
 - logout должен инициировать single logout в identity provider.
+- текущий phased rollout допускает временное отключение web chat в OIDC режиме, пока не будет отдельного websocket auth bridge.
 
 ### Mobile
 

@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./web-auth": {
+      "types": "./src/web-auth.ts",
+      "default": "./dist/web-auth.js"
     }
   },
   "scripts": {

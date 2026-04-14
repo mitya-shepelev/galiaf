@@ -45,6 +45,24 @@
 - `admin-portal`, `manager-cabinet`, `employee-cabinet` используют общий SDK и `x-dev-auth-context`;
 - `mobile-app` должен уметь проверять `session`, `access/roles`, `workspace` и ожидаемые `403` для restricted routes в dev-режиме.
 
+## Текущая web-реализация
+
+- `admin-portal`, `manager-cabinet`, `employee-cabinet` используют server-side routes:
+  - `/auth/login`
+  - `/auth/callback`
+  - `/auth/logout`
+- login использует `Authorization Code Flow + PKCE`;
+- после callback access token хранится в `HttpOnly`, `Secure`, `SameSite=Lax` cookie web-приложения;
+- server components и server actions отправляют bearer token в `core-api`;
+- при `401` кабинет не откатывается в demo persona, а требует переавторизацию.
+
+## Текущий компромисс по chat
+
+- backend и websocket already support bearer token;
+- web OIDC login для кабинетов уже включен;
+- realtime chat в web OIDC режиме временно отключен до отдельного websocket auth bridge;
+- dev/local режим с demo personas сохраняет текущий live chat client для smoke-проверок.
+
 ## Guardrails для internet-facing окружений
 
 `dev bypass` и demo personas допустимы только как временный debug path.

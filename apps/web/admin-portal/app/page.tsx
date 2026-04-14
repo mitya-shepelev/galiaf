@@ -1,8 +1,6 @@
 import { revalidatePath } from "next/cache";
 import {
-  ApiClient,
-  createDevAuthHeaders,
-  demoAuthContexts,
+  ApiError,
   type AuditEventRecord,
   type MembershipRecord,
 } from "@galiaf/sdk";
@@ -10,6 +8,10 @@ import {
   AdminActionsPanel,
   type AdminActionState,
 } from "./admin-actions-panel";
+import {
+  areDevPersonasEnabled,
+  resolveAdminAuth,
+} from "./auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,23 +21,6 @@ const adminSections = [
   "Аудит действий и журнал событий",
   "Контроль доступности backend и chat сервисов",
 ];
-
-function areDevPersonasEnabled(): boolean {
-  const raw = process.env.GALIAF_ENABLE_DEV_PERSONAS;
-
-  if (raw != null) {
-    return raw === "true";
-  }
-
-  return process.env.NODE_ENV !== "production";
-}
-
-function createApiClient() {
-  return new ApiClient({
-    baseUrl: process.env.GALIAF_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1",
-    defaultHeaders: createDevAuthHeaders(demoAuthContexts.platformAdmin),
-  });
-}
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -94,11 +79,14 @@ async function createOrganizationAction(
   "use server";
 
   if (!areDevPersonasEnabled()) {
-    return {
-      status: "error",
-      message:
-        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
-    };
+    const auth = await resolveAdminAuth();
+
+    if (auth.kind === "login-required") {
+      return {
+        status: "error",
+        message: "Нужна активная OIDC-сессия. Выполни вход заново.",
+      };
+    }
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -112,9 +100,16 @@ async function createOrganizationAction(
   }
 
   try {
-    const api = createApiClient();
+    const auth = await resolveAdminAuth();
 
-    await api.createOrganization({
+    if (auth.kind === "login-required") {
+      return {
+        status: "error",
+        message: "Нужна активная OIDC-сессия. Выполни вход заново.",
+      };
+    }
+
+    await auth.api.createOrganization({
       name,
       status,
     });
@@ -134,14 +129,16 @@ async function createOrganizationAction(
 }
 
 export default async function AdminPortalPage() {
-  if (!areDevPersonasEnabled()) {
+  const auth = await resolveAdminAuth();
+
+  if (auth.kind === "login-required") {
     return (
       <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
         <p style={{ color: "var(--accent)", marginBottom: "12px" }}>
           Platform Admin
         </p>
         <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
-          Demo personas отключены.
+          Нужен вход через OIDC.
         </h1>
         <article
           style={{
@@ -152,34 +149,38 @@ export default async function AdminPortalPage() {
             padding: "24px",
           }}
         >
-          Для production окружения этот кабинет больше не должен неявно использовать
-          `x-dev-auth-context`. Настрой реальный OIDC flow или временно укажи
-          `GALIAF_ENABLE_DEV_PERSONAS=true` только для изолированного debug-окружения.
+          Для production окружения этот кабинет больше не использует demo persona.
+          Перейди на реальный login flow и начни с авторизации через identity
+          provider.
+          <div style={{ marginTop: "18px" }}>
+            <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+              Войти через OIDC
+            </a>
+          </div>
         </article>
       </main>
     );
   }
 
-  const api = createApiClient();
-  const [
-    health,
-    session,
-    bootstrap,
-    organizations,
-    users,
-    memberships,
-    adminProfile,
-    auditEvents,
-  ] =
-    await Promise.all([
-      api.getHealth(),
-      api.getSession(),
-      api.getAdminBootstrap(),
-      api.listOrganizations(),
-      api.listUsers(),
-      api.listMemberships(),
-      api.getCurrentUser(),
-      api.listAuditEvents({ limit: 8 }),
+  try {
+    const [
+      health,
+      session,
+      bootstrap,
+      organizations,
+      users,
+      memberships,
+      adminProfile,
+      auditEvents,
+    ] = await Promise.all([
+      auth.api.getHealth(),
+      auth.api.getSession(),
+      auth.api.getAdminBootstrap(),
+      auth.api.listOrganizations(),
+      auth.api.listUsers(),
+      auth.api.listMemberships(),
+      auth.api.getCurrentUser(),
+      auth.api.listAuditEvents({ limit: 8 }),
     ]);
   const activeMemberships = memberships.filter(
     (membership) => membership.status === "active",
@@ -193,6 +194,12 @@ export default async function AdminPortalPage() {
       <h1 style={{ fontSize: "clamp(2.5rem, 7vw, 4.5rem)", margin: 0 }}>
         Единый центр управления платформой.
       </h1>
+      <p style={{ marginTop: "14px" }}>
+        Режим авторизации: {auth.kind === "dev" ? "dev persona" : "OIDC session"} ·{" "}
+        <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+          выйти
+        </a>
+      </p>
       <section
         style={{
           marginTop: "28px",
@@ -463,4 +470,40 @@ export default async function AdminPortalPage() {
       </section>
     </main>
   );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return (
+        <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+          <p style={{ color: "var(--accent)", marginBottom: "12px" }}>
+            Platform Admin
+          </p>
+          <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+            Сессия истекла или стала недействительной.
+          </h1>
+          <article
+            style={{
+              marginTop: "24px",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "24px",
+              padding: "24px",
+            }}
+          >
+            API вернул `401`. Для безопасного production-потока кабинет не падает в
+            demo persona, а просит повторную авторизацию.
+            <div style={{ marginTop: "18px", display: "flex", gap: "16px" }}>
+              <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+                Войти заново
+              </a>
+              <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+                Очистить сессию
+              </a>
+            </div>
+          </article>
+        </main>
+      );
+    }
+
+    throw error;
+  }
 }

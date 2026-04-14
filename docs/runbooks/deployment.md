@@ -56,6 +56,11 @@ Metrics и log sources описаны отдельно в `docs/architecture/obs
 - `AUTH_JWKS_URI`
 - `AUTH_ALLOWED_CORS_ORIGINS`
 - `GALIAF_ENABLE_DEV_PERSONAS`
+- `CHAT_AUTH_AUDIENCE`
+- `AUTH_ADMIN_WEB_CLIENT_ID`
+- `AUTH_MANAGER_WEB_CLIENT_ID`
+- `AUTH_EMPLOYEE_WEB_CLIENT_ID`
+- `AUTH_MOBILE_CLIENT_ID`
 
 ## Dokploy production path
 
@@ -100,6 +105,29 @@ GALIAF_ENABLE_DEV_PERSONAS=true
 ```
 
 Без этих флагов backend/chat не поднимутся на non-local origins, а внутренние кабинеты покажут explicit auth-required экран вместо demo personas.
+
+## Web OIDC bootstrap
+
+Для `admin-portal`, `manager-cabinet`, `employee-cabinet` production path теперь такой:
+
+1. пользователь открывает кабинет;
+2. если `GALIAF_ENABLE_DEV_PERSONAS=false` и нет session cookie, кабинет предлагает `/auth/login`;
+3. web проходит `OIDC Authorization Code + PKCE`;
+4. callback сохраняет access token в `HttpOnly` cookie;
+5. server components и server actions используют bearer token для запросов в `core-api`.
+
+Опциональные service-level env overrides для web:
+
+- `GALIAF_OIDC_CLIENT_ID`
+- `GALIAF_OIDC_REDIRECT_URI`
+- `GALIAF_OIDC_POST_LOGOUT_REDIRECT_URI`
+
+Обычно они не нужны, если:
+
+- `AUTH_*_WEB_CLIENT_ID` на backend совпадают с OIDC provider clients;
+- redirect URI может быть вычислен от реального origin кабинета.
+
+Важно: `manager` и `employee` в OIDC-режиме пока не включают live websocket chat. Для этого нужен отдельный auth bridge, который не будет светить access token в client runtime.
 
 ## Self-managed fallback deploy stack
 

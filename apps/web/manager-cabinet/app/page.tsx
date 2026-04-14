@@ -1,8 +1,6 @@
 import { revalidatePath } from "next/cache";
 import {
-  ApiClient,
-  createDevAuthHeaders,
-  demoAuthContexts,
+  ApiError,
   type MembershipRecord,
 } from "@galiaf/sdk";
 import { LiveChatPanel } from "./live-chat-panel";
@@ -10,6 +8,10 @@ import {
   ManagerActionsPanel,
   type ManagerActionState,
 } from "./manager-actions-panel";
+import {
+  areDevPersonasEnabled,
+  resolveManagerAuth,
+} from "./auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,23 +20,6 @@ const managerCapabilities = [
   "Управление объектами и сменами внутри своей организации",
   "Контроль переписок и операционных уведомлений",
 ];
-
-function areDevPersonasEnabled(): boolean {
-  const raw = process.env.GALIAF_ENABLE_DEV_PERSONAS;
-
-  if (raw != null) {
-    return raw === "true";
-  }
-
-  return process.env.NODE_ENV !== "production";
-}
-
-function createApiClient() {
-  return new ApiClient({
-    baseUrl: process.env.GALIAF_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1",
-    defaultHeaders: createDevAuthHeaders(demoAuthContexts.managerAlpha),
-  });
-}
 
 function resolveOrganizationId(workspace: {
   activeTenantId?: string;
@@ -57,14 +42,6 @@ async function createInvitationAction(
 ): Promise<ManagerActionState> {
   "use server";
 
-  if (!areDevPersonasEnabled()) {
-    return {
-      status: "error",
-      message:
-        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
-    };
-  }
-
   const organizationId = String(formData.get("organizationId") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const targetName = String(formData.get("targetName") ?? "").trim();
@@ -78,9 +55,16 @@ async function createInvitationAction(
   }
 
   try {
-    const api = createApiClient();
+    const auth = await resolveManagerAuth();
 
-    await api.createInvitation({
+    if (auth.kind === "login-required") {
+      return {
+        status: "error",
+        message: "Нужна активная OIDC-сессия. Выполни вход заново.",
+      };
+    }
+
+    await auth.api.createInvitation({
       organizationId,
       email,
       targetName: targetName.length > 0 ? targetName : undefined,
@@ -107,14 +91,6 @@ async function createEmployeeAction(
 ): Promise<ManagerActionState> {
   "use server";
 
-  if (!areDevPersonasEnabled()) {
-    return {
-      status: "error",
-      message:
-        "Demo personas disabled. Configure real OIDC auth or temporarily set GALIAF_ENABLE_DEV_PERSONAS=true.",
-    };
-  }
-
   const organizationId = String(formData.get("organizationId") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -128,9 +104,16 @@ async function createEmployeeAction(
   }
 
   try {
-    const api = createApiClient();
+    const auth = await resolveManagerAuth();
 
-    await api.createOrganizationEmployee(organizationId, {
+    if (auth.kind === "login-required") {
+      return {
+        status: "error",
+        message: "Нужна активная OIDC-сессия. Выполни вход заново.",
+      };
+    }
+
+    await auth.api.createOrganizationEmployee(organizationId, {
       email,
       fullName,
       roles: [role],
@@ -159,14 +142,16 @@ function membershipBadge(membership?: MembershipRecord) {
 }
 
 export default async function ManagerCabinetPage() {
-  if (!areDevPersonasEnabled()) {
+  const auth = await resolveManagerAuth();
+
+  if (auth.kind === "login-required") {
     return (
       <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
         <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
           Company Manager
         </p>
         <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
-          Demo personas отключены.
+          Нужен вход через OIDC.
         </h1>
         <article
           style={{
@@ -177,325 +162,397 @@ export default async function ManagerCabinetPage() {
             padding: "24px",
           }}
         >
-          Этот кабинет больше не должен неявно работать через demo manager persona в
-          production. Настрой реальный OIDC flow или временно укажи
-          `GALIAF_ENABLE_DEV_PERSONAS=true` только для изолированного debug-окружения.
+          Для production окружения кабинет руководителя больше не использует demo
+          manager persona. Войди через identity provider и продолжи работу в
+          tenant-контуре.
+          <div style={{ marginTop: "18px" }}>
+            <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+              Войти через OIDC
+            </a>
+          </div>
         </article>
       </main>
     );
   }
 
-  const api = createApiClient();
-  const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
-  const [session, workspace, organizations, users, managerProfile] = await Promise.all([
-    api.getSession(),
-    api.getWorkspace(),
-    api.listOrganizations(),
-    api.listUsers(),
-    api.getCurrentUser(),
-  ]);
-  const currentOrganizationId = resolveOrganizationId(workspace);
-  const [memberships, invitations] = await Promise.all([
-    api.listMemberships(currentOrganizationId),
-    api.listInvitations(currentOrganizationId),
-  ]);
-  const membershipByUserId = new Map(
-    memberships.map((membership) => [membership.userId, membership]),
-  );
-  const scopedUsers = users.filter((user) => membershipByUserId.has(user.id));
+  try {
+    const chatBaseUrl = process.env.GALIAF_CHAT_BASE_URL ?? "http://127.0.0.1:4010";
+    const [session, workspace, organizations, users, managerProfile] = await Promise.all([
+      auth.api.getSession(),
+      auth.api.getWorkspace(),
+      auth.api.listOrganizations(),
+      auth.api.listUsers(),
+      auth.api.getCurrentUser(),
+    ]);
+    const currentOrganizationId = resolveOrganizationId(workspace);
+    const [memberships, invitations] = await Promise.all([
+      auth.api.listMemberships(currentOrganizationId),
+      auth.api.listInvitations(currentOrganizationId),
+    ]);
+    const membershipByUserId = new Map(
+      memberships.map((membership) => [membership.userId, membership]),
+    );
+    const scopedUsers = users.filter((user) => membershipByUserId.has(user.id));
 
-  return (
-    <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "72px 24px" }}>
-      <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
-        Company Manager
-      </p>
-      <h1 style={{ fontSize: "clamp(2.3rem, 6vw, 4.2rem)", margin: 0 }}>
-        Кабинет руководителя с live tenant-операциями.
-      </h1>
-      <section
-        style={{
-          marginTop: "28px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: "16px",
-        }}
-      >
-        {managerCapabilities.map((item) => (
+    return (
+      <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "72px 24px" }}>
+        <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
+          Company Manager
+        </p>
+        <h1 style={{ fontSize: "clamp(2.3rem, 6vw, 4.2rem)", margin: 0 }}>
+          Кабинет руководителя с live tenant-операциями.
+        </h1>
+        <p style={{ marginTop: "14px" }}>
+          Режим авторизации: {auth.kind === "dev" ? "dev persona" : "OIDC session"} ·{" "}
+          <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+            выйти
+          </a>
+        </p>
+        <section
+          style={{
+            marginTop: "28px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {managerCapabilities.map((item) => (
+            <article
+              key={item}
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--line)",
+                borderRadius: "18px",
+                padding: "20px",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              {item}
+            </article>
+          ))}
+        </section>
+        <section
+          style={{
+            marginTop: "16px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {[
+            `Активная организация: ${currentOrganizationId}`,
+            `Пользователей в контуре: ${scopedUsers.length}`,
+            `Участников: ${memberships.length}`,
+            `Инвайтов: ${invitations.length}`,
+          ].map((item) => (
+            <article
+              key={item}
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--line)",
+                borderRadius: "18px",
+                padding: "18px",
+              }}
+            >
+              {item}
+            </article>
+          ))}
+        </section>
+        <ManagerActionsPanel
+          createEmployeeAction={createEmployeeAction}
+          createInvitationAction={createInvitationAction}
+          organizationId={currentOrganizationId}
+        />
+        <section
+          style={{
+            marginTop: "16px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "16px",
+          }}
+        >
           <article
-            key={item}
             style={{
               background: "var(--panel)",
               border: "1px solid var(--line)",
-              borderRadius: "18px",
-              padding: "20px",
-              backdropFilter: "blur(10px)",
+              borderRadius: "20px",
+              padding: "22px",
             }}
           >
-            {item}
+            <p style={{ color: "var(--muted)", marginTop: 0 }}>Сессия</p>
+            <p style={{ marginBottom: "8px" }}>{session.subject}</p>
+            <p style={{ marginTop: 0, color: "var(--muted)" }}>
+              Роли: {session.effectiveRoles.join(", ")}
+            </p>
+            <p style={{ marginTop: "18px", marginBottom: "8px" }}>
+              Доступные membership-контексты
+            </p>
+            <div style={{ display: "grid", gap: "8px" }}>
+              {workspace.availableMemberships.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px dashed var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  У текущего manager context пока нет доступных membership.
+                </div>
+              ) : null}
+              {workspace.availableMemberships.map((membership) => (
+                <div
+                  key={membership.organizationId}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                  }}
+                >
+                  {membership.organizationId}: {membership.roles.join(", ")}
+                </div>
+              ))}
+            </div>
+            <p style={{ marginTop: "18px", marginBottom: "8px" }}>
+              DB-backed профиль менеджера
+            </p>
+            <div style={{ display: "grid", gap: "8px" }}>
+              {managerProfile.resolvedOrganizations.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px dashed var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  В базе пока не найдено организаций, связанных с текущим менеджером.
+                </div>
+              ) : null}
+              {managerProfile.resolvedOrganizations.map((organization) => (
+                <div
+                  key={organization.id}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                  }}
+                >
+                  {organization.name} · {organization.id}
+                </div>
+              ))}
+            </div>
           </article>
-        ))}
-      </section>
-      <section
-        style={{
-          marginTop: "16px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-        }}
-      >
-        {[
-          `Активная организация: ${currentOrganizationId}`,
-          `Пользователей в контуре: ${scopedUsers.length}`,
-          `Участников: ${memberships.length}`,
-          `Инвайтов: ${invitations.length}`,
-        ].map((item) => (
           <article
-            key={item}
             style={{
               background: "var(--panel)",
               border: "1px solid var(--line)",
-              borderRadius: "18px",
-              padding: "18px",
+              borderRadius: "20px",
+              padding: "22px",
             }}
           >
-            {item}
+            <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {organizations.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px dashed var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  В активном контуре пока нет организаций для просмотра.
+                </div>
+              ) : null}
+              {organizations.map((organization) => (
+                <div
+                  key={organization.id}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                  }}
+                >
+                  <strong>{organization.name}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {organization.id} · {organization.status}
+                  </p>
+                </div>
+              ))}
+            </div>
           </article>
-        ))}
-      </section>
-      <ManagerActionsPanel
-        createEmployeeAction={createEmployeeAction}
-        createInvitationAction={createInvitationAction}
-        organizationId={currentOrganizationId}
-      />
-      <section
-        style={{
-          marginTop: "16px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "16px",
-        }}
-      >
-        <article
+        </section>
+        <section
           style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: "20px",
-            padding: "22px",
+            marginTop: "16px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "16px",
           }}
         >
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>Сессия</p>
-          <p style={{ marginBottom: "8px" }}>{session.subject}</p>
-          <p style={{ marginTop: 0, color: "var(--muted)" }}>
-            Роли: {session.effectiveRoles.join(", ")}
+          <article
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "20px",
+              padding: "22px",
+            }}
+          >
+            <p style={{ color: "var(--muted)", marginTop: 0 }}>Команда организации</p>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {scopedUsers.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px dashed var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  В активной организации пока нет сотрудников.
+                </div>
+              ) : null}
+              {scopedUsers.map((user) => (
+                <div
+                  key={user.id}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                  }}
+                >
+                  <strong>{user.fullName}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {user.email}
+                  </p>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {membershipBadge(membershipByUserId.get(user.id))}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article
+            style={{
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "20px",
+              padding: "22px",
+            }}
+          >
+            <p style={{ color: "var(--muted)", marginTop: 0 }}>
+              Ожидающие приглашения
+            </p>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {invitations.length === 0 ? (
+                <div
+                  style={{
+                    border: "1px dashed var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  Для активной организации нет ожидающих приглашений.
+                </div>
+              ) : null}
+              {invitations.map((invitation) => (
+                <div
+                  key={invitation.id}
+                  style={{
+                    border: "1px solid var(--line)",
+                    borderRadius: "14px",
+                    padding: "12px",
+                  }}
+                >
+                  <strong>{invitation.email}</strong>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    {invitation.roles.join(", ")} · {invitation.status}
+                  </p>
+                  <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
+                    Истекает: {new Date(invitation.expiresAt).toLocaleString("ru-RU")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+        {auth.kind === "dev" ? (
+          <LiveChatPanel
+            chatBaseUrl={chatBaseUrl}
+            identity={{
+              sub: session.subject,
+              issuer: session.issuer,
+              audiences: [],
+              scopes: session.scopes,
+              email: managerProfile.user.email,
+              name: managerProfile.user.fullName,
+              clientId: session.clientId,
+              activeTenantId: session.activeTenantId,
+              platformRoles: session.platformRoles,
+              tenantMemberships: session.tenantMemberships,
+              effectiveRoles: session.effectiveRoles,
+              rawClaims: {},
+            }}
+            roomId={`org:${currentOrganizationId}`}
+            subtitle="Минимальный live chat client для smoke-проверки manager/employee потока."
+            title="Live Chat"
+          />
+        ) : (
+          <section
+            style={{
+              marginTop: "16px",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "24px",
+              padding: "22px",
+            }}
+          >
+            <p style={{ color: "var(--muted)", marginTop: 0 }}>
+              Realtime chat временно недоступен в OIDC-режиме.
+            </p>
+            Для websocket нужен отдельный auth bridge без вывода access token в
+            клиентский runtime. API и tenant-операции уже работают через защищенную
+            OIDC session.
+          </section>
+        )}
+      </main>
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return (
+        <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+          <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
+            Company Manager
           </p>
-          <p style={{ marginTop: "18px", marginBottom: "8px" }}>
-            Доступные membership-контексты
-          </p>
-          <div style={{ display: "grid", gap: "8px" }}>
-            {workspace.availableMemberships.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  color: "var(--muted)",
-                }}
-              >
-                У текущего manager context пока нет доступных membership.
-              </div>
-            ) : null}
-            {workspace.availableMemberships.map((membership) => (
-              <div
-                key={membership.organizationId}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                }}
-              >
-                {membership.organizationId}: {membership.roles.join(", ")}
-              </div>
-            ))}
-          </div>
-          <p style={{ marginTop: "18px", marginBottom: "8px" }}>
-            DB-backed профиль менеджера
-          </p>
-          <div style={{ display: "grid", gap: "8px" }}>
-            {managerProfile.resolvedOrganizations.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  color: "var(--muted)",
-                }}
-              >
-                В базе пока не найдено организаций, связанных с текущим менеджером.
-              </div>
-            ) : null}
-            {managerProfile.resolvedOrganizations.map((organization) => (
-              <div
-                key={organization.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                }}
-              >
-                {organization.name} · {organization.id}
-              </div>
-            ))}
-          </div>
-        </article>
-        <article
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: "20px",
-            padding: "22px",
-          }}
-        >
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>Организации</p>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {organizations.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  color: "var(--muted)",
-                }}
-              >
-                В активном контуре пока нет организаций для просмотра.
-              </div>
-            ) : null}
-            {organizations.map((organization) => (
-              <div
-                key={organization.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                }}
-              >
-                <strong>{organization.name}</strong>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {organization.id} · {organization.status}
-                </p>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-      <section
-        style={{
-          marginTop: "16px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "16px",
-        }}
-      >
-        <article
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: "20px",
-            padding: "22px",
-          }}
-        >
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>Команда организации</p>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {scopedUsers.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  color: "var(--muted)",
-                }}
-              >
-                В активной организации пока нет сотрудников.
-              </div>
-            ) : null}
-            {scopedUsers.map((user) => (
-              <div
-                key={user.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                }}
-              >
-                <strong>{user.fullName}</strong>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {user.email}
-                </p>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {membershipBadge(membershipByUserId.get(user.id))}
-                </p>
-              </div>
-            ))}
-          </div>
-        </article>
-        <article
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: "20px",
-            padding: "22px",
-          }}
-        >
-          <p style={{ color: "var(--muted)", marginTop: 0 }}>
-            Ожидающие приглашения
-          </p>
-          <div style={{ display: "grid", gap: "10px" }}>
-            {invitations.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  color: "var(--muted)",
-                }}
-              >
-                Для активной организации нет ожидающих приглашений.
-              </div>
-            ) : null}
-            {invitations.map((invitation) => (
-              <div
-                key={invitation.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                  padding: "12px",
-                }}
-              >
-                <strong>{invitation.email}</strong>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  {invitation.roles.join(", ")} · {invitation.status}
-                </p>
-                <p style={{ margin: "6px 0 0", color: "var(--muted)" }}>
-                  Истекает: {new Date(invitation.expiresAt).toLocaleString("ru-RU")}
-                </p>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-      <LiveChatPanel
-        chatBaseUrl={chatBaseUrl}
-        identity={{
-          ...demoAuthContexts.managerAlpha,
-          issuer: "dev-bypass",
-          audiences: [],
-          scopes: [],
-          effectiveRoles: ["company_manager"],
-          rawClaims: {},
-        }}
-        roomId={`org:${currentOrganizationId}`}
-        subtitle="Минимальный live chat client для smoke-проверки manager/employee потока."
-        title="Live Chat"
-      />
-    </main>
-  );
+          <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+            Сессия истекла или стала недействительной.
+          </h1>
+          <article
+            style={{
+              marginTop: "24px",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "24px",
+              padding: "24px",
+            }}
+          >
+            API вернул `401`. Кабинет не откатывается в demo persona, а просит
+            безопасную переавторизацию.
+            <div style={{ marginTop: "18px", display: "flex", gap: "16px" }}>
+              <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+                Войти заново
+              </a>
+              <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+                Очистить сессию
+              </a>
+            </div>
+          </article>
+        </main>
+      );
+    }
+
+    throw error;
+  }
 }
