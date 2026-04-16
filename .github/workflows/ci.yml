@@ -122,7 +122,7 @@ jobs:
       - name: Start smoke services
         run: |
           until pg_isready -h 127.0.0.1 -U postgres -d galiaf; do sleep 1; done
-          until redis-cli -u redis://127.0.0.1:6379 ping; do sleep 1; done
+          until bash -c '</dev/tcp/127.0.0.1/6379' 2>/dev/null; do sleep 1; done
 
           node apps/api/core-api/dist/main.js > /tmp/core-api.log 2>&1 &
           echo $! > /tmp/core-api.pid
