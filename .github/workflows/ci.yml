@@ -121,6 +121,9 @@ jobs:
 
       - name: Start smoke services
         run: |
+          until pg_isready -h 127.0.0.1 -U postgres -d galiaf; do sleep 1; done
+          until redis-cli -u redis://127.0.0.1:6379 ping; do sleep 1; done
+
           node apps/api/core-api/dist/main.js > /tmp/core-api.log 2>&1 &
           echo $! > /tmp/core-api.pid
 
@@ -138,11 +141,34 @@ jobs:
 
       - name: Wait for smoke services
         run: |
-          until curl --fail --silent http://127.0.0.1:4000/api/v1/health > /dev/null; do sleep 1; done
-          until curl --fail --silent http://127.0.0.1:4010/api/v1/health > /dev/null; do sleep 1; done
-          until curl --fail --silent http://127.0.0.1:3001 > /dev/null; do sleep 1; done
-          until curl --fail --silent http://127.0.0.1:3002 > /dev/null; do sleep 1; done
-          until curl --fail --silent http://127.0.0.1:3003 > /dev/null; do sleep 1; done
+          wait_for_http() {
+            local name="$1"
+            local url="$2"
+            local log_file="$3"
+            local elapsed=0
+
+            until curl --fail --silent "$url" > /dev/null; do
+              elapsed=$((elapsed + 1))
+
+              if [ "$elapsed" -ge 90 ]; then
+                echo "::error::$name did not become ready at $url within 90 seconds"
+                if [ -f "$log_file" ]; then
+                  echo "::group::${name} startup log"
+                  cat "$log_file"
+                  echo "::endgroup::"
+                fi
+                exit 1
+              fi
+
+              sleep 1
+            done
+          }
+
+          wait_for_http "core-api" "http://127.0.0.1:4000/api/v1/health" "/tmp/core-api.log"
+          wait_for_http "chat-service" "http://127.0.0.1:4010/api/v1/health" "/tmp/chat-service.log"
+          wait_for_http "admin-portal" "http://127.0.0.1:3001" "/tmp/admin-portal.log"
+          wait_for_http "manager-cabinet" "http://127.0.0.1:3002" "/tmp/manager-cabinet.log"
+          wait_for_http "employee-cabinet" "http://127.0.0.1:3003" "/tmp/employee-cabinet.log"
 
       - name: Core API smoke
         run: pnpm core-api:manager:smoke
