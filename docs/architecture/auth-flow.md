@@ -39,6 +39,14 @@
 3. provider или session layer формирует обновленный access context;
 4. backend применяет только active context, а не весь список memberships без выбора.
 
+## DB-backed fallback для tenant access
+
+- `OIDC` остается источником аутентификации;
+- `platform_admin` читается из `realm_access.roles`;
+- tenant-scoped доступ для `company_manager` и `employee` может быть получен не только из token claims, но и из `memberships` в `core-api` DB;
+- если у пользователя ровно один active membership, `core-api` может автоматически выбрать `activeTenantId`;
+- таким образом Keycloak не остается единственным источником tenant context.
+
 ## Dev verification
 
 - `public-site` использует публичный `auth/public-config` и `health` как live snapshot;

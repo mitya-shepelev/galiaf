@@ -53,6 +53,7 @@
 - принимает access token;
 - не выдает собственные пароли и не дублирует login screen;
 - проверяет token claims и access context.
+- для tenant-scoped ролей может использовать `memberships` из собственной БД как fallback-источник доступа, если tenant claims не пришли из identity provider.
 
 ### Chat
 

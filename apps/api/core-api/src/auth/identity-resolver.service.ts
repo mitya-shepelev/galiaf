@@ -6,6 +6,7 @@ import type {
   SupportedRole,
   TenantMembership,
 } from "./auth.types.js";
+import { DomainStoreService } from "../domain/domain-store.service.js";
 
 type RequestLike = {
   headers: Record<string, string | string[] | undefined>;
@@ -18,6 +19,8 @@ export class IdentityResolverService {
   public constructor(
     @Inject(AuthConfigService)
     private readonly authConfig: AuthConfigService,
+    @Inject(DomainStoreService)
+    private readonly store: DomainStoreService,
   ) {}
 
   public async resolveRequest(request: RequestLike): Promise<RequestIdentity | null> {
@@ -118,13 +121,12 @@ export class IdentityResolverService {
     }
   }
 
-  private mapClaimsToIdentity(payload: JWTPayload): RequestIdentity {
+  private async mapClaimsToIdentity(payload: JWTPayload): Promise<RequestIdentity> {
     const rawClaims = payload as Record<string, unknown>;
     const platformRoles = this.extractPlatformRoles(rawClaims);
     const activeTenantId = this.getOptionalString(rawClaims.active_tenant);
     const tenantMemberships = this.extractTenantMemberships(rawClaims, activeTenantId);
-
-    return {
+    const identity: RequestIdentity = {
       sub: payload.sub ?? "unknown",
       issuer: payload.iss ?? this.authConfig.getIssuerUrl(),
       audiences: this.normalizeAudience(payload.aud),
@@ -145,6 +147,76 @@ export class IdentityResolverService {
       ),
       rawClaims,
     };
+
+    return this.enrichIdentityFromStore(identity);
+  }
+
+  private async enrichIdentityFromStore(
+    identity: RequestIdentity,
+  ): Promise<RequestIdentity> {
+    const user =
+      (await this.store.findUserBySubject(identity.sub)) ??
+      (identity.email
+        ? await this.store.findUserByEmail(identity.email)
+        : undefined);
+
+    if (!user) {
+      return identity;
+    }
+
+    const dbMemberships = (await this.store.listMembershipsByUserId(user.id))
+      .filter((membership) => membership.status === "active")
+      .map<TenantMembership>((membership) => ({
+        organizationId: membership.organizationId,
+        roles: membership.roles,
+      }));
+
+    if (dbMemberships.length === 0) {
+      return identity;
+    }
+
+    const tenantMemberships = this.mergeTenantMemberships(
+      identity.tenantMemberships,
+      dbMemberships,
+    );
+    const activeTenantId =
+      identity.activeTenantId ??
+      (tenantMemberships.length === 1
+        ? tenantMemberships[0]?.organizationId
+        : undefined);
+
+    return {
+      ...identity,
+      tenantMemberships,
+      activeTenantId,
+      effectiveRoles: this.calculateEffectiveRoles(
+        identity.platformRoles,
+        tenantMemberships,
+        activeTenantId,
+      ),
+    };
+  }
+
+  private mergeTenantMemberships(
+    explicitMemberships: TenantMembership[],
+    dbMemberships: TenantMembership[],
+  ): TenantMembership[] {
+    const merged = new Map<string, Set<TenantMembership["roles"][number]>>();
+
+    for (const membership of [...explicitMemberships, ...dbMemberships]) {
+      const current = merged.get(membership.organizationId) ?? new Set();
+
+      for (const role of membership.roles) {
+        current.add(role);
+      }
+
+      merged.set(membership.organizationId, current);
+    }
+
+    return Array.from(merged.entries()).map(([organizationId, roles]) => ({
+      organizationId,
+      roles: Array.from(roles),
+    }));
   }
 
   private normalizeAudience(aud: string | string[] | undefined): string[] {

@@ -159,6 +159,7 @@
   - для `manager` и `employee` добавлен short-lived chat bridge token, чтобы вернуть live websocket chat в web OIDC режиме.
   - добавлен baseline Keycloak realm import и пошаговый runbook для переключения live окружения на `AUTH_MODE=oidc`.
   - для Keycloak добавлен отдельный compose/runtime baseline под `auth.socvid.ru` с Dokploy-friendly env contract и healthcheck.
+  - `core-api` получил DB-backed fallback для tenant-scoped OIDC identities, чтобы `manager` и `employee` могли опираться на `memberships` в PostgreSQL, даже если Keycloak не отдает tenant claims.
 - Критерий выхода:
   - проект можно безопасно выкатывать в staging/production с понятной операционной моделью.
 
