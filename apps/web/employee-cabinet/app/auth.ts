@@ -67,6 +67,26 @@ export function sanitizeReturnTo(value: string | null | undefined): string {
   return value;
 }
 
+export function resolveRequestOrigin(request: Request): string {
+  const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",")[0]
+    ?.trim();
+  const forwardedProto = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
+
+  if (forwardedHost) {
+    const proto = forwardedProto && forwardedProto.length > 0 ? forwardedProto : "https";
+
+    return `${proto}://${forwardedHost}`;
+  }
+
+  return requestUrl.origin;
+}
+
 export async function resolveEmployeeAuth(): Promise<ResolvedEmployeeAuth> {
   if (areDevPersonasEnabled()) {
     return {

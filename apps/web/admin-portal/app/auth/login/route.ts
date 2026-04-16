@@ -12,11 +12,12 @@ import {
   loadPublicAuthConfig,
   resolveOidcClientId,
   resolveOidcRedirectUri,
+  resolveRequestOrigin,
   sanitizeReturnTo,
 } from "../../auth";
 
 export async function GET(request: Request) {
-  const origin = new URL(request.url).origin;
+  const origin = resolveRequestOrigin(request);
   const returnTo = sanitizeReturnTo(
     new URL(request.url).searchParams.get("returnTo"),
   );

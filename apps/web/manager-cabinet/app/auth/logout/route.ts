@@ -9,10 +9,11 @@ import {
   getSessionCookieName,
   loadPublicAuthConfig,
   resolveOidcPostLogoutRedirectUri,
+  resolveRequestOrigin,
 } from "../../auth";
 
 export async function GET(request: Request) {
-  const origin = new URL(request.url).origin;
+  const origin = resolveRequestOrigin(request);
   const cookieStore = await cookies();
   const idTokenHint = cookieStore.get(ID_TOKEN_COOKIE_NAME)?.value;
   const authConfig = await loadPublicAuthConfig();
