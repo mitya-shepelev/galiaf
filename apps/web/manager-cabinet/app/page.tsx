@@ -561,6 +561,41 @@ export default async function ManagerCabinetPage() {
       );
     }
 
+    if (error instanceof ApiError && error.status === 403) {
+      return (
+        <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+          <p style={{ color: "var(--accent)", marginBottom: "10px" }}>
+            Company Manager
+          </p>
+          <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+            Вход выполнен, но manager-доступ еще не provisioned.
+          </h1>
+          <article
+            style={{
+              marginTop: "24px",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "24px",
+              padding: "24px",
+            }}
+          >
+            `core-api` подтвердил OIDC-сессию, но не нашел для этого аккаунта активный
+            `company_manager` membership в доменной модели платформы. Нужно связать
+            пользователя с организацией в backend, после чего кабинет начнет
+            загружаться без повторного логина.
+            <div style={{ marginTop: "18px", display: "flex", gap: "16px" }}>
+              <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+                Обновить сессию
+              </a>
+              <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+                Выйти
+              </a>
+            </div>
+          </article>
+        </main>
+      );
+    }
+
     throw error;
   }
 }

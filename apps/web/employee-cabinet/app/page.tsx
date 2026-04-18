@@ -427,6 +427,39 @@ export default async function EmployeeCabinetPage() {
       );
     }
 
+    if (error instanceof ApiError && error.status === 403) {
+      return (
+        <main style={{ maxWidth: "960px", margin: "0 auto", padding: "72px 24px" }}>
+          <p style={{ color: "var(--accent)", marginBottom: "10px" }}>Employee</p>
+          <h1 style={{ fontSize: "clamp(2.2rem, 6vw, 4rem)", margin: 0 }}>
+            Вход выполнен, но employee-доступ еще не provisioned.
+          </h1>
+          <article
+            style={{
+              marginTop: "24px",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "24px",
+              padding: "24px",
+            }}
+          >
+            `core-api` подтвердил OIDC-сессию, но не нашел для этого аккаунта
+            активный employee membership в доменной модели платформы. После
+            привязки пользователя к организации в backend кабинет начнет
+            открываться без дополнительной настройки Keycloak.
+            <div style={{ marginTop: "18px", display: "flex", gap: "16px" }}>
+              <a href="/auth/login?returnTo=/" style={{ color: "var(--accent)" }}>
+                Обновить сессию
+              </a>
+              <a href="/auth/logout" style={{ color: "var(--accent)" }}>
+                Выйти
+              </a>
+            </div>
+          </article>
+        </main>
+      );
+    }
+
     throw error;
   }
 }
